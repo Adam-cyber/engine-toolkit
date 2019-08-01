@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -126,33 +125,27 @@ func (e *Engine) runInference(ctx context.Context) error {
 	defer cancel()
 	var cmd *exec.Cmd
 	if len(e.Config.Subprocess.Arguments) > 0 {
-		var logBuffer bytes.Buffer
-		go func() {
-			s := bufio.NewScanner(&logBuffer)
-			for s.Scan() {
-				var lc *logContext
-				e.logContextLock.RLock()
-				lc = e.logContext
-				e.logContextLock.RUnlock()
-				if lc == nil {
-					continue
-				}
-				e.sendEvent(event{
-					Key:     lc.Key,
-					Type:    lc.Type,
-					JobID:   lc.JobID,
-					TaskID:  lc.TaskID,
-					ChunkID: lc.ChunkID,
-					LogText: s.Text(),
-				})
+		writeLogFunc := writerFunc(func(p []byte) (n int, err error) {
+			var lc *logContext
+			e.logContextLock.RLock()
+			lc = e.logContext
+			e.logContextLock.RUnlock()
+			if lc == nil {
+				return len(p), nil
 			}
-			if err := s.Err(); err != nil {
-				e.logDebug("failed to read from log buffer:", err)
-			}
-		}()
+			e.sendEvent(event{
+				Key:     lc.Key,
+				Type:    lc.Type,
+				JobID:   lc.JobID,
+				TaskID:  lc.TaskID,
+				ChunkID: lc.ChunkID,
+				LogText: string(p),
+			})
+			return len(p), nil
+		})
 		cmd = exec.CommandContext(ctx, e.Config.Subprocess.Arguments[0], e.Config.Subprocess.Arguments[1:]...)
-		cmd.Stdout = io.MultiWriter(e.Config.Stdout, &logBuffer)
-		cmd.Stderr = io.MultiWriter(e.Config.Stderr, &logBuffer)
+		cmd.Stdout = io.MultiWriter(e.Config.Stdout, writeLogFunc)
+		cmd.Stderr = io.MultiWriter(e.Config.Stderr, writeLogFunc)
 		if err := cmd.Start(); err != nil {
 			return errors.Wrap(err, e.Config.Subprocess.Arguments[0])
 		}
