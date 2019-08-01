@@ -237,7 +237,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	if err := json.Unmarshal(msg.Value, &mediaChunk); err != nil {
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
-	lc := &logContext{
+	lc := logContext{
 		Key:     mediaChunk.ChunkUUID,
 		Type:    eventLog,
 		JobID:   mediaChunk.JobID,
