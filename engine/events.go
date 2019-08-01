@@ -12,6 +12,9 @@ import (
 const (
 	eventType = "edge_event_data"
 
+	// eventLog indicates a log event.
+	eventLog = "engine_log"
+
 	// eventConsumed event when consumed a Kafka message from its engine topic
 	eventConsumed = "media_chunk_consumed"
 	// eventProduced (or ChunkProcessedStatusProduced or EngineOutputProduced) event when producing a Kafka message to chunk_all topic
@@ -35,6 +38,9 @@ type event struct {
 	JobID   string
 	TaskID  string
 	ChunkID string
+
+	// LogText is a log line for this processing task.
+	LogText string
 
 	// for periodic events
 	ProcessingDurationSecs int64
@@ -66,6 +72,7 @@ func (e *Engine) sendEvent(evt event) {
 		JobID:   evt.JobID,
 		TaskID:  evt.TaskID,
 		ChunkID: evt.ChunkID,
+		LogText: evt.LogText,
 	}
 	_, _, err := e.eventProducer.SendMessage(&sarama.ProducerMessage{
 		Topic: e.Config.Kafka.EventTopic,
@@ -112,6 +119,8 @@ type edgeEvent struct {
 	TaskID       string      `json:"taskId,omitempty"`       // TaskID this event is associated with (required, except for EngineInstance* events)
 	ChunkID      string      `json:"chunkId,omitempty"`      // ChunkID this event is associated with (required, except for GQLCall, ChunkEOF, GenericEvent, RunTask, and EngineInstance events)
 	EngineInfo   *EngineInfo `json:"engineInfo,omitempty"`   // EngineInfo required only for EngineInstance events
+	// LogText is a log line during the processing of a task.
+	LogText string `json:"logText,omitempty"`
 }
 
 // EngineInfo contains contextual data for EngineInstance* events

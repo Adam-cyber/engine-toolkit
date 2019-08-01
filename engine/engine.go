@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -29,12 +30,29 @@ type Engine struct {
 	client   *http.Client
 	logDebug func(args ...interface{})
 
+	logContextLock sync.RWMutex
+	logContext     *logContext
+
 	// Config holds the Engine configuration.
 	Config Config
 
 	// processing time
 	processingDurationLock sync.RWMutex
 	processingDuration     time.Duration
+}
+
+// logContextSet sets the current log context.
+func (e *Engine) logContextSet(c *logContext) {
+	e.logContextLock.Lock()
+	defer e.logContextLock.Unlock()
+	e.logContext = c
+}
+
+// logContextClear clears the current log context.
+func (e *Engine) logContextClear() {
+	e.logContextLock.Lock()
+	defer e.logContextLock.Unlock()
+	e.logContext = nil
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
@@ -95,6 +113,12 @@ func (e *Engine) runSubprocessOnly(ctx context.Context) error {
 	return nil
 }
 
+type writerFunc func(p []byte) (n int, err error)
+
+func (fn writerFunc) Write(p []byte) (n int, err error) {
+	return fn(p)
+}
+
 // runInference starts the subprocess and routes work to webhooks.
 // This is used to process files.
 func (e *Engine) runInference(ctx context.Context) error {
@@ -102,9 +126,33 @@ func (e *Engine) runInference(ctx context.Context) error {
 	defer cancel()
 	var cmd *exec.Cmd
 	if len(e.Config.Subprocess.Arguments) > 0 {
+		var logBuffer bytes.Buffer
+		go func() {
+			s := bufio.NewScanner(&logBuffer)
+			for s.Scan() {
+				var lc *logContext
+				e.logContextLock.RLock()
+				lc = e.logContext
+				e.logContextLock.RUnlock()
+				if lc == nil {
+					continue
+				}
+				e.sendEvent(event{
+					Key:     lc.Key,
+					Type:    lc.Type,
+					JobID:   lc.JobID,
+					TaskID:  lc.TaskID,
+					ChunkID: lc.ChunkID,
+					LogText: s.Text(),
+				})
+			}
+			if err := s.Err(); err != nil {
+				e.logDebug("failed to read from log buffer:", err)
+			}
+		}()
 		cmd = exec.CommandContext(ctx, e.Config.Subprocess.Arguments[0], e.Config.Subprocess.Arguments[1:]...)
-		cmd.Stdout = e.Config.Stdout
-		cmd.Stderr = e.Config.Stderr
+		cmd.Stdout = io.MultiWriter(e.Config.Stdout, &logBuffer)
+		cmd.Stderr = io.MultiWriter(e.Config.Stderr, &logBuffer)
 		if err := cmd.Start(); err != nil {
 			return errors.Wrap(err, e.Config.Subprocess.Arguments[0])
 		}
@@ -195,6 +243,15 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	if err := json.Unmarshal(msg.Value, &mediaChunk); err != nil {
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
+	lc := &logContext{
+		Key:     mediaChunk.ChunkUUID,
+		Type:    eventLog,
+		JobID:   mediaChunk.JobID,
+		TaskID:  mediaChunk.TaskID,
+		ChunkID: mediaChunk.ChunkUUID,
+	}
+	e.logContextSet(lc)
+	defer e.logContextClear()
 	e.sendEvent(event{
 		Key:     mediaChunk.ChunkUUID,
 		Type:    eventConsumed,
@@ -202,7 +259,6 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		TaskID:  mediaChunk.TaskID,
 		ChunkID: mediaChunk.ChunkUUID,
 	})
-
 	finalUpdateMessage := chunkResult{
 		Type:      messageTypeChunkResult,
 		TaskID:    mediaChunk.TaskID,
@@ -370,4 +426,12 @@ func (j *jsonEncoder) Encode() ([]byte, error) {
 func (j *jsonEncoder) Length() int {
 	j.encode()
 	return len(j.b)
+}
+
+type logContext struct {
+	Key     string
+	Type    string
+	JobID   string
+	TaskID  string
+	ChunkID string
 }
