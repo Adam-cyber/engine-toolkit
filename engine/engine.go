@@ -30,7 +30,7 @@ type Engine struct {
 	logDebug func(args ...interface{})
 
 	logContextLock sync.RWMutex
-	logContext     *logContext
+	logContext     logContext
 
 	// Config holds the Engine configuration.
 	Config Config
@@ -41,7 +41,7 @@ type Engine struct {
 }
 
 // logContextSet sets the current log context.
-func (e *Engine) logContextSet(c *logContext) {
+func (e *Engine) logContextSet(c logContext) {
 	e.logContextLock.Lock()
 	defer e.logContextLock.Unlock()
 	e.logContext = c
@@ -51,7 +51,7 @@ func (e *Engine) logContextSet(c *logContext) {
 func (e *Engine) logContextClear() {
 	e.logContextLock.Lock()
 	defer e.logContextLock.Unlock()
-	e.logContext = nil
+	e.logContext = logContext{}
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
@@ -126,11 +126,12 @@ func (e *Engine) runInference(ctx context.Context) error {
 	var cmd *exec.Cmd
 	if len(e.Config.Subprocess.Arguments) > 0 {
 		writeLogFunc := writerFunc(func(p []byte) (n int, err error) {
-			var lc *logContext
+			var lc logContext
 			e.logContextLock.RLock()
 			lc = e.logContext
 			e.logContextLock.RUnlock()
-			if lc == nil {
+			if lc.Key == "" {
+				// no context - so skip this item
 				return len(p), nil
 			}
 			e.sendEvent(event{
