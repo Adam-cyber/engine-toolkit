@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	// set the target URL here
+	targetURL = ""
+)
+
 func main() {
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -30,10 +35,6 @@ func main() {
 }
 
 func handleProcess(w http.ResponseWriter, r *http.Request) error {
-	const (
-		method = http.MethodPost
-		url    = "https://apps.machinebox.io/tagbox/check"
-	)
 	chunkR, _, err := r.FormFile("chunk")
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func handleProcess(w http.ResponseWriter, r *http.Request) error {
 	if err := body.Close(); err != nil {
 		return err
 	}
-	req, err := http.NewRequest(method, url, &buf)
+	req, err := http.NewRequest(http.MethodPost, targetURL, &buf)
 	if err != nil {
 		return err
 	}

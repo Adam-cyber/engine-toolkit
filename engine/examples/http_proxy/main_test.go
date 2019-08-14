@@ -16,6 +16,14 @@ import (
 )
 
 func Test(t *testing.T) {
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, engineOutput)
+	}))
+	defer srv.Close()
+	targetURL = srv.URL
+
 	var buf bytes.Buffer
 	m := multipart.NewWriter(&buf)
 	m.WriteField("startOffsetMS", "1000")
@@ -56,6 +64,8 @@ func Test(t *testing.T) {
 		t.Fatalf("%s", err)
 	}
 	if !reflect.DeepEqual(obj, expectedObj) {
+		t.Logf("Expected: %+v", expectedObj)
+		t.Logf("  Actual: %+v", obj)
 		t.Fatal("incorrect output")
 	}
 
@@ -104,13 +114,66 @@ func round(f float64) float64 {
 	return math.Round(f*1000) / 1000
 }
 
+const engineOutput = `{
+	"success": true,
+	"tags": [
+	  {
+		"tag": "Wildlife",
+		"confidence": 0.99
+	  },
+	  {
+		"tag": "Animal",
+		"confidence": 0.98
+	  },
+	  {
+		"tag": "Pre-dreadnought battleship",
+		"confidence": 0.97
+	  },
+	  {
+		"tag": "Primate",
+		"confidence": 0.96
+	  },
+	  {
+		"tag": "Mammal",
+		"confidence": 0.95
+	  },
+	  {
+		"tag": "Jungle",
+		"confidence": 0.94
+	  },
+	  {
+		"tag": "Monkey",
+		"confidence": 0.93
+	  },
+	  {
+		"tag": "Rainforest",
+		"confidence": 0.92
+	  },
+	  {
+		"tag": "Ape",
+		"confidence": 0.91
+	  },
+	  {
+		"tag": "Zoo",
+		"confidence": 0.90
+	  }
+	],
+	"custom_tags": [
+	  {
+		"tag": "other",
+		"confidence": 0.9,
+		"id": "72rr9o"
+	  }
+	]
+  }`
+
 const expectedOutput = `{
 	"series": [{
 		"startTimeMs": 1000,
 		"stopTimeMs": 2000,
 		"found": "Wildlife",
 		"object": {
-			"confidence": 0.919754683971405,
+			"confidence": 0.99,
 			"label": "Wildlife",
 			"type": "object",
 			"boundingPoly": [{
@@ -132,7 +195,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Animal",
 		"object": {
-			"confidence": 0.8748621940612793,
+			"confidence": 0.98,
 			"label": "Animal",
 			"type": "object",
 			"boundingPoly": [{
@@ -154,7 +217,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Pre-dreadnought battleship",
 		"object": {
-			"confidence": 0.8732866048812866,
+			"confidence": 0.97,
 			"label": "Pre-dreadnought battleship",
 			"type": "object",
 			"boundingPoly": [{
@@ -176,7 +239,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Primate",
 		"object": {
-			"confidence": 0.8389277458190918,
+			"confidence": 0.96,
 			"label": "Primate",
 			"type": "object",
 			"boundingPoly": [{
@@ -198,7 +261,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Mammal",
 		"object": {
-			"confidence": 0.8311088681221008,
+			"confidence": 0.95,
 			"label": "Mammal",
 			"type": "object",
 			"boundingPoly": [{
@@ -220,7 +283,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Jungle",
 		"object": {
-			"confidence": 0.7361117601394653,
+			"confidence": 0.94,
 			"label": "Jungle",
 			"type": "object",
 			"boundingPoly": [{
@@ -242,7 +305,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Monkey",
 		"object": {
-			"confidence": 0.6977391839027405,
+			"confidence": 0.93,
 			"label": "Monkey",
 			"type": "object",
 			"boundingPoly": [{
@@ -264,7 +327,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Rainforest",
 		"object": {
-			"confidence": 0.5723546147346497,
+			"confidence": 0.92,
 			"label": "Rainforest",
 			"type": "object",
 			"boundingPoly": [{
@@ -286,7 +349,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Ape",
 		"object": {
-			"confidence": 0.4915062487125397,
+			"confidence": 0.91,
 			"label": "Ape",
 			"type": "object",
 			"boundingPoly": [{
@@ -308,7 +371,7 @@ const expectedOutput = `{
 		"stopTimeMs": 2000,
 		"found": "Zoo",
 		"object": {
-			"confidence": 0.46555301547050476,
+			"confidence": 0.90,
 			"label": "Zoo",
 			"type": "object",
 			"boundingPoly": [{
