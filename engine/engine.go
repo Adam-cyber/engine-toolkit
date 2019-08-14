@@ -338,8 +338,6 @@ func (e *Engine) addProcessingTime(d time.Duration) {
 	e.processingDuration += d
 }
 
-func nolog(args ...interface{}) {}
-
 // errReadyTimeout is sent down the Ready channel if the
 // Webhooks.Ready.MaximumPollDuration is exceeded.
 var errReadyTimeout = errors.New("ready: maximum duration exceeded")

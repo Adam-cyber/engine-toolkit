@@ -117,10 +117,9 @@ type messageType string
 type chunkStatus string
 
 const (
-	messageTypeChunkProcessedStatus messageType = "chunk_processed_status"
-	messageTypeChunkResult          messageType = "chunk_result"
-	messageTypeMediaChunk           messageType = "media_chunk"
-	messageTypeEngineOutput         messageType = "engine_output"
+	messageTypeChunkResult  messageType = "chunk_result"
+	messageTypeMediaChunk   messageType = "media_chunk"
+	messageTypeEngineOutput messageType = "engine_output"
 )
 
 const (

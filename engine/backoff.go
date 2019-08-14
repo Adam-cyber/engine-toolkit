@@ -56,13 +56,3 @@ func (b *doubleTimeBackoff) Do(f func() error) error {
 		time.Sleep(backoff)
 	}
 }
-
-type nilBackoff struct{}
-
-// NewNilBackoff it just calls the function, it is usefull for testing
-func newNilBackoff() retrier {
-	return nilBackoff{}
-}
-func (nilBackoff) Do(f func() error) error {
-	return f()
-}
