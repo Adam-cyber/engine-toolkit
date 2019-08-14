@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +21,12 @@ type Config struct {
 		// EndIfIdleDuration is the duration after the last message
 		// at which point the engine will shut down.
 		EndIfIdleDuration time.Duration
+	}
+	// Processing contains configuration about how the engine toolkit
+	// handles work.
+	Processing struct {
+		// Concurrency is the number of tasks to run concurrently.
+		Concurrency int
 	}
 	// Stdout is the Engine's stdout. Subprocesses inherit this.
 	Stdout io.Writer
@@ -93,6 +101,16 @@ func NewConfig() Config {
 	c.Subprocess.ReadyTimeout = 1 * time.Minute
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
+
+	c.Processing.Concurrency = 1
+	if concurrencyStr := os.Getenv("VERITONE_CONCURRENT_TASKS"); concurrencyStr != "" {
+		// try and set concurrency (bad values will be logged and ignored)
+		var err error
+		if c.Processing.Concurrency, err = strconv.Atoi(concurrencyStr); err != nil {
+			fmt.Fprintf(os.Stderr, "malformed VERITONE_CONCURRENT_TASKS (expected int) reverting to 1: %s\n", concurrencyStr)
+			c.Processing.Concurrency = 1
+		}
+	}
 
 	c.Engine.InstanceID = os.Getenv("ENGINE_INSTANCE_ID")
 	c.Engine.ID = os.Getenv("ENGINE_ID")

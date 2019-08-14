@@ -47,7 +47,7 @@ func TestNewRequestFromMediaChunk(t *testing.T) {
 		defer wg.Done()
 		is.Equal(r.FormValue("chunkMimeType"), "application/test")
 		is.Equal(r.FormValue("chunkIndex"), "1")
-		//is.Equal("chunkUUID", r.FormValue("chunkUUID"))
+		is.Equal("chunkUUID", r.FormValue("chunkUUID"))
 		//is.Equal("jobID", r.FormValue("jobID"))
 		//is.Equal("taskID", r.FormValue("taskID"))
 		//is.Equal("tdoID", r.FormValue("tdoID"))

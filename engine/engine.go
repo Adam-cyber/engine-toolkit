@@ -24,6 +24,10 @@ type Engine struct {
 	eventProducer Producer
 	consumer      Consumer
 
+	// processingSemaphore is a buffered channel that controls how
+	// many concurrent processing tasks will be performed.
+	processingSemaphore chan struct{}
+
 	testMode bool
 
 	client   *http.Client
@@ -76,6 +80,11 @@ func (e *Engine) Run(ctx context.Context) error {
 		e.logDebug("running subprocess for training...")
 		return e.runSubprocessOnly(ctx)
 	}
+	semaphoreSize := 1
+	if e.Config.Processing.Concurrency > 0 {
+		semaphoreSize = e.Config.Processing.Concurrency
+	}
+	e.processingSemaphore = make(chan struct{}, semaphoreSize)
 	e.logDebug("running inference...")
 	return e.runInference(ctx)
 }
@@ -115,6 +124,7 @@ func (e *Engine) runInference(ctx context.Context) error {
 			return err
 		}
 	}
+	e.logDebug(fmt.Sprintf("processing %d task(s) concurrently", e.Config.Processing.Concurrency))
 	e.logDebug("waiting for messages...")
 	e.sendEvent(event{
 		Key:  e.Config.Engine.ID,
@@ -122,7 +132,10 @@ func (e *Engine) runInference(ctx context.Context) error {
 	})
 	go e.sendPeriodicEvents(ctx)
 	go func() {
+		var wg sync.WaitGroup
 		defer func() {
+			e.logDebug("waiting for jobs to finish...")
+			wg.Wait()
 			e.logDebug("shutting down...")
 			e.sendEvent(event{
 				Key:  e.Config.Engine.ID,
@@ -134,13 +147,28 @@ func (e *Engine) runInference(ctx context.Context) error {
 			select {
 			case msg, ok := <-e.consumer.Messages():
 				if !ok {
+					// consumer has closed down
 					return
 				}
-				//e.logDebug(fmt.Sprintf("message: topic:%q partition:%v offset:%v", msg.Topic, msg.Partition, msg.Offset))
 				e.consumer.MarkOffset(msg, "")
-				if err := e.processMessage(ctx, msg); err != nil {
-					e.logDebug(fmt.Sprintf("processing error: %v", err))
+				select {
+				case <-ctx.Done():
+					return
+				case e.processingSemaphore <- struct{}{}:
+					// try to put something into the semaphore
+					// this will block if the channel is full
+					// causing processing to pause - it will unblock
+					// when we release the semaphore.
 				}
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if err := e.processMessage(ctx, msg); err != nil {
+						e.logDebug(fmt.Sprintf("processing error: %v", err))
+					}
+					// release the semaphore
+					<-e.processingSemaphore
+				}()
 			case <-time.After(e.Config.Engine.EndIfIdleDuration):
 				e.logDebug(fmt.Sprintf("idle for %s", e.Config.Engine.EndIfIdleDuration))
 				return
@@ -202,7 +230,6 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		TaskID:  mediaChunk.TaskID,
 		ChunkID: mediaChunk.ChunkUUID,
 	})
-
 	finalUpdateMessage := chunkResult{
 		Type:      messageTypeChunkResult,
 		TaskID:    mediaChunk.TaskID,

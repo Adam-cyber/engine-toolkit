@@ -21,6 +21,7 @@ func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaC
 	if err = w.WriteField("chunkMimeType", msg.MIMEType); err != nil {
 		return nil, errors.Wrap(err, "cannot write to multipart writer")
 	}
+	_ = w.WriteField("chunkUUID", msg.ChunkUUID)
 	_ = w.WriteField("chunkIndex", strconv.Itoa(msg.ChunkIndex))
 	_ = w.WriteField("startOffsetMS", strconv.Itoa(msg.StartOffsetMS))
 	_ = w.WriteField("endOffsetMS", strconv.Itoa(msg.EndOffsetMS))
