@@ -15,7 +15,8 @@ import (
 func TestNewRequestFromMediaChunk(t *testing.T) {
 	is := is.New(t)
 	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "this simulates data")
+		_, err := io.WriteString(w, "this simulates data")
+		is.NoErr(err)
 	}))
 	defer fileSrv.Close()
 	msg := mediaChunkMessage{

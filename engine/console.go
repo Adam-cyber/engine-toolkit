@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -28,7 +29,9 @@ func (e *Engine) runTestConsole(context.Context) {
 	if err := http.ListenAndServe("0.0.0.0:9090", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
-			io.WriteString(w, consoleHTML)
+			if _, err := io.WriteString(w, consoleHTML); err != nil {
+				log.Println(err)
+			}
 		case "/api/engine/process":
 			processWebhookProxy.ServeHTTP(w, r)
 		case "/api/engine/ready":

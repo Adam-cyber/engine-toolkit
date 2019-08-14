@@ -17,18 +17,21 @@ func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaC
 	}
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	w.WriteField("chunkMimeType", msg.MIMEType)
-	w.WriteField("chunkIndex", strconv.Itoa(msg.ChunkIndex))
-	w.WriteField("startOffsetMS", strconv.Itoa(msg.StartOffsetMS))
-	w.WriteField("endOffsetMS", strconv.Itoa(msg.EndOffsetMS))
-	w.WriteField("width", strconv.Itoa(msg.Width))
-	w.WriteField("height", strconv.Itoa(msg.Height))
-	w.WriteField("libraryId", payload.LibraryID)
-	w.WriteField("libraryEngineModelId", payload.LibraryEngineModelID)
-	w.WriteField("cacheURI", msg.CacheURI)
-	w.WriteField("veritoneApiBaseUrl", payload.VeritoneAPIBaseURL)
-	w.WriteField("token", payload.Token)
-	w.WriteField("payload", string(msg.TaskPayload))
+	// check the first error, and if it's ok - ignore the rest
+	if err = w.WriteField("chunkMimeType", msg.MIMEType); err != nil {
+		return nil, errors.Wrap(err, "cannot write to multipart writer")
+	}
+	_ = w.WriteField("chunkIndex", strconv.Itoa(msg.ChunkIndex))
+	_ = w.WriteField("startOffsetMS", strconv.Itoa(msg.StartOffsetMS))
+	_ = w.WriteField("endOffsetMS", strconv.Itoa(msg.EndOffsetMS))
+	_ = w.WriteField("width", strconv.Itoa(msg.Width))
+	_ = w.WriteField("height", strconv.Itoa(msg.Height))
+	_ = w.WriteField("libraryId", payload.LibraryID)
+	_ = w.WriteField("libraryEngineModelId", payload.LibraryEngineModelID)
+	_ = w.WriteField("cacheURI", msg.CacheURI)
+	_ = w.WriteField("veritoneApiBaseUrl", payload.VeritoneAPIBaseURL)
+	_ = w.WriteField("token", payload.Token)
+	_ = w.WriteField("payload", string(msg.TaskPayload))
 	if msg.CacheURI != "" {
 		f, err := w.CreateFormFile("chunk", "chunk.data")
 		if err != nil {
