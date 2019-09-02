@@ -33,39 +33,37 @@ func TestLock(t *testing.T) {
 	is.Equal(err, selfdriving.ErrFileLocked)
 
 	// unlock
-	err = f.Unlock()
-	is.NoErr(err)
+	f.Unlock()
 
 	// lock again (should succeed)
 	err = f.Lock()
 	is.NoErr(err)
 
 	// finally, unlock
-	err = f.Unlock()
-	is.NoErr(err)
+	f.Unlock()
 }
 
-func Test(t *testing.T) {
+func TestRandomSelector(t *testing.T) {
 	is := is.New(t)
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	inputDir, _, cleanup := createTestData(t)
+	inputDir, cleanup := createTestData(t)
 	defer cleanup()
-	s := selfdriving.FileSelector{
+	s := &selfdriving.RandomSelector{
 		Rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
 		InputDir:     inputDir,
 		InputPattern: "*.txt",
 		Logger:       log.New(os.Stdout, "", log.LstdFlags),
 	}
-	f, err := s.RandomFile(ctx)
+	f, err := s.Select(ctx)
 	is.NoErr(err)
-	//defer f.Unlock()
+	defer f.Unlock()
 	log.Println("random file:", f)
 	t.Fail()
 }
 
-func createTestData(t *testing.T) (string, string, func()) {
+func createTestData(t *testing.T) (string, func()) {
 	t.Helper()
 	is := is.New(t)
 	path := filepath.Join("testdata", time.Now().Format(time.RFC3339Nano))
@@ -75,15 +73,12 @@ func createTestData(t *testing.T) (string, string, func()) {
 		is.NoErr(err)
 	}
 	inputDir := filepath.Join(path, "input")
-	outputDir := filepath.Join(path, "output")
 	err := os.MkdirAll(inputDir, 0777)
-	is.NoErr(err)
-	err = os.MkdirAll(outputDir, 0777)
 	is.NoErr(err)
 	for i := 0; i < 10; i++ {
 		txt := fmt.Sprintf("%d.txt", i)
 		err := ioutil.WriteFile(filepath.Join(inputDir, txt), []byte(txt), 0777)
 		is.NoErr(err)
 	}
-	return inputDir, outputDir, f
+	return inputDir, f
 }
