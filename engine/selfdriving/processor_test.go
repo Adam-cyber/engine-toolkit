@@ -46,7 +46,7 @@ func TestProcessing(t *testing.T) {
 func TestProcessingPipeline(t *testing.T) {
 	is := is.New(t)
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	inputDir, cleanup := createTestData(t)
@@ -91,7 +91,7 @@ func TestProcessingPipeline(t *testing.T) {
 		OutputDir: output1Dir,
 		Process: func(f selfdriving.File) error {
 			log.Println("TODO: process 1:", f.Path)
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
 	}
@@ -101,7 +101,7 @@ func TestProcessingPipeline(t *testing.T) {
 		OutputDir: output2Dir,
 		Process: func(f selfdriving.File) error {
 			log.Println("TODO: process 2:", f.Path)
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
 	}
@@ -111,7 +111,7 @@ func TestProcessingPipeline(t *testing.T) {
 		OutputDir: output3Dir,
 		Process: func(f selfdriving.File) error {
 			log.Println("TODO: process 3:", f.Path)
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
 	}
@@ -143,6 +143,5 @@ func TestProcessingPipeline(t *testing.T) {
 	}()
 
 	wg.Wait()
-	time.Sleep(10 * time.Second)
 
 }
