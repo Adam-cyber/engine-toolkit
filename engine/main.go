@@ -55,6 +55,10 @@ func run(ctx context.Context) error {
 		skipKafka = true
 		eng.testMode = true
 	}
+	if eng.Config.SelfDriving.SelfDrivingMode {
+		eng.logDebug("Running in file system mode (VERITONE_FSMODE)")
+		skipKafka = true
+	}
 	if !skipKafka {
 		eng.logDebug("brokers:", eng.Config.Kafka.Brokers)
 		eng.logDebug("consumer group:", eng.Config.Kafka.ConsumerGroup)

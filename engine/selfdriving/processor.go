@@ -11,14 +11,15 @@ import (
 )
 
 type Processor struct {
-	Logger    *log.Logger
-	Files     FileSelector
-	Process   func(File) error
-	OutputDir string
+	Logger     *log.Logger
+	Selector   FileSelector
+	Process    func(outputFile string, file File) error
+	MoveToDir  string
+	ResultsDir string
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	if err := os.MkdirAll(p.OutputDir, 0777); err != nil {
+	if err := os.MkdirAll(p.MoveToDir, 0777); err != nil {
 		p.Logger.Println("failed to make output directory:", err)
 	}
 	for {
@@ -26,7 +27,7 @@ func (p *Processor) Run(ctx context.Context) error {
 			return err
 		}
 		err := func() error {
-			file, err := p.Files.Select(ctx)
+			file, err := p.Selector.Select(ctx)
 			if err != nil {
 				return err
 			}
@@ -47,20 +48,19 @@ func (p *Processor) Run(ctx context.Context) error {
 
 func (p *Processor) processFile(file File) error {
 	time.Sleep(250 * time.Millisecond)
-	return p.Process(file)
+	outputFile := filepath.Join(p.ResultsDir, filepath.Base(file.Path)+".json")
+	return p.Process(outputFile, file)
 }
 
 func (p *Processor) moveFile(file File) error {
-	// remove .done file
-	if err := os.Remove(file.Path + fileSuffixReady); err != nil {
-		p.Logger.Printf("failed to remove %s file: %s\n", fileSuffixReady, err)
-	}
+	// remove .ready file (if this fails, it's ok)
+	_ = os.Remove(file.Path + fileSuffixReady)
 	// move input file
-	dest := filepath.Join(p.OutputDir, filepath.Base(file.Path))
+	dest := filepath.Join(p.MoveToDir, filepath.Base(file.Path))
 	if err := os.Rename(file.Path, dest); err != nil {
 		return errors.Wrap(err, "rename")
 	}
-	// create new .done file
+	// create new .ready file
 	doneFile := dest + fileSuffixReady
 	if err := os.Symlink(dest, doneFile); err != nil {
 		return err

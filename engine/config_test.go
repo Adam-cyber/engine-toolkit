@@ -23,6 +23,11 @@ func TestNewConfig(t *testing.T) {
 
 	os.Setenv("ENGINE_INSTANCE_ID", "instance1")
 	os.Setenv("ENGINE_ID", "engine1")
+	os.Setenv("VERITONE_SELFDRIVING", "true")
+	defer os.Setenv("VERITONE_SELFDRIVING", "false")
+	os.Setenv("VERITONE_SELFDRIVING_POLLINTERVAL", "5m")
+	os.Setenv("VERITONE_SELFDRIVING_INPUTPATTERN", "*.jpg")
+	os.Setenv("VERITONE_SELFDRIVING_WAITREADYFILES", "true")
 
 	config := NewConfig()
 	is.Equal(config.Webhooks.Ready.URL, "http://0.0.0.0:8080/readyz")
@@ -50,4 +55,11 @@ func TestNewConfig(t *testing.T) {
 
 	// events
 	is.Equal(config.Events.PeriodicUpdateDuration, 1*time.Minute)
+
+	// self driving
+	is.Equal(config.SelfDriving.SelfDrivingMode, true)
+	is.Equal(config.SelfDriving.PollInterval, 5*time.Minute)
+	is.Equal(config.SelfDriving.WaitForReadyFiles, true)
+	is.Equal(config.SelfDriving.InputPattern, "*.jpg")
+
 }

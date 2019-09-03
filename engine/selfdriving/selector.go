@@ -87,7 +87,6 @@ func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 				return nil
 			}
 			if s.WaitForReadyFiles && strings.HasSuffix(path, fileSuffixReady) {
-				log.Println("found a done file:", path)
 				// trim off .done
 				path = path[:len(path)-len(fileSuffixReady)]
 				match, err := s.matchesInputPattern(path)

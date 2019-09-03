@@ -20,8 +20,8 @@ func TestProcessing(t *testing.T) {
 	defer cancel()
 	inputDir, cleanup := createTestData(t)
 	defer cleanup()
-	processFunc := func(f selfdriving.File) error {
-		log.Println("TODO: process", f.Path)
+	processFunc := func(outputFile string, f selfdriving.File) error {
+		log.Println("TODO: process", f.Path, outputFile)
 		time.Sleep(1 * time.Second)
 		return nil
 	}
@@ -33,10 +33,11 @@ func TestProcessing(t *testing.T) {
 	}
 	outputDir := filepath.Join(filepath.Dir(inputDir), "output")
 	p := &selfdriving.Processor{
-		Files:     s,
-		Logger:    log.New(os.Stdout, "", log.LstdFlags),
-		OutputDir: outputDir,
-		Process:   processFunc,
+		Files:      s,
+		Logger:     log.New(os.Stdout, "", log.LstdFlags),
+		MoveToDir:  outputDir,
+		ResultsDir: outputDir,
+		Process:    processFunc,
 	}
 	if err := p.Run(ctx); err != nil {
 		t.Logf("run: %v", err)
@@ -86,31 +87,34 @@ func TestProcessingPipeline(t *testing.T) {
 	}
 
 	p1 := &selfdriving.Processor{
-		Files:     s1,
-		Logger:    log.New(os.Stdout, "", log.LstdFlags),
-		OutputDir: output1Dir,
-		Process: func(f selfdriving.File) error {
-			log.Println("TODO: process 1:", f.Path)
+		Files:      s1,
+		Logger:     log.New(os.Stdout, "", log.LstdFlags),
+		MoveToDir:  output1Dir,
+		ResultsDir: output1Dir,
+		Process: func(outputFile string, f selfdriving.File) error {
+			log.Println("TODO: process 1:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
 	}
 	p2 := &selfdriving.Processor{
-		Files:     s2,
-		Logger:    log.New(os.Stdout, "", log.LstdFlags),
-		OutputDir: output2Dir,
-		Process: func(f selfdriving.File) error {
-			log.Println("TODO: process 2:", f.Path)
+		Files:      s2,
+		Logger:     log.New(os.Stdout, "", log.LstdFlags),
+		MoveToDir:  output2Dir,
+		ResultsDir: output2Dir,
+		Process: func(outputFile string, f selfdriving.File) error {
+			log.Println("TODO: process 2:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
 	}
 	p3 := &selfdriving.Processor{
-		Files:     s3,
-		Logger:    log.New(os.Stdout, "", log.LstdFlags),
-		OutputDir: output3Dir,
-		Process: func(f selfdriving.File) error {
-			log.Println("TODO: process 3:", f.Path)
+		Files:      s3,
+		Logger:     log.New(os.Stdout, "", log.LstdFlags),
+		MoveToDir:  output3Dir,
+		ResultsDir: output3Dir,
+		Process: func(outputFile string, f selfdriving.File) error {
+			log.Println("TODO: process 3:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},

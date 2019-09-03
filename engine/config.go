@@ -91,6 +91,19 @@ type Config struct {
 		// send periodic updates during processing.
 		PeriodicUpdateDuration time.Duration
 	}
+	// SelfDriving contains configuration related to running the engine in
+	// self driving mode, drawing input from a directory and writing output to another.
+	SelfDriving struct {
+		// SelfDrivingMode is whether this engine is in self driving mode or not.
+		SelfDrivingMode bool
+		// InputPattern is the filepath.Glob pattern to use when selecting input files.
+		InputPattern string
+		// PollInterval is the time to wait before checking for input files.
+		PollInterval time.Duration
+		// WaitForReadyFiles will wait for input files to have a `*.ready` marker file
+		// before it will be processed.
+		WaitForReadyFiles bool
+	}
 }
 
 // NewConfig gets default configuration settings.
@@ -143,6 +156,18 @@ func NewConfig() Config {
 	// fixed parameters for event info
 	c.Kafka.EventTopic = "events"
 	c.Events.PeriodicUpdateDuration = 1 * time.Minute
+
+	// self driving mode
+	c.SelfDriving.SelfDrivingMode = os.Getenv("VERITONE_SELFDRIVING") == "true"
+	c.SelfDriving.WaitForReadyFiles = os.Getenv("VERITONE_SELFDRIVING_WAITREADYFILES") == "true"
+	c.SelfDriving.InputPattern = os.Getenv("VERITONE_SELFDRIVING_INPUTPATTERN")
+	if interval := os.Getenv("VERITONE_SELFDRIVING_POLLINTERVAL"); interval != "" {
+		var err error
+		c.SelfDriving.PollInterval, err = time.ParseDuration(interval)
+		if err != nil {
+			log.Printf("VERITONE_SELFDRIVING_POLLINTERVAL %q: %v", interval, err)
+		}
+	}
 
 	return c
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/selfdriving"
 )
 
 // Engine consumes messages and calls webhooks to
@@ -85,6 +87,10 @@ func (e *Engine) Run(ctx context.Context) error {
 		semaphoreSize = e.Config.Processing.Concurrency
 	}
 	e.processingSemaphore = make(chan struct{}, semaphoreSize)
+	if e.Config.SelfDriving.SelfDrivingMode {
+		e.logDebug("running inference in file system mode...")
+		return e.runInferenceFSMode(ctx)
+	}
 	e.logDebug("running inference...")
 	return e.runInference(ctx)
 }
@@ -101,6 +107,46 @@ func (e *Engine) runSubprocessOnly(ctx context.Context) error {
 	if err := cmd.Run(); err != nil {
 		return errors.Wrap(err, e.Config.Subprocess.Arguments[0])
 	}
+	return nil
+}
+
+// runInferenceFSMode starts the subprocess and routes work to webhooks
+// drawing work from the input folder, sending output to the output folder.
+func (e *Engine) runInferenceFSMode(ctx context.Context) error {
+	go func() {
+		if err := e.runSubprocessOnly(ctx); err != nil {
+			e.logDebug("runSubprocessOnly: error:", err)
+		}
+	}()
+	readyCtx, cancel := context.WithTimeout(ctx, e.Config.Subprocess.ReadyTimeout)
+	defer cancel()
+	e.logDebug("waiting for ready... will expire after", e.Config.Subprocess.ReadyTimeout)
+	if err := e.ready(readyCtx); err != nil {
+		return err
+	}
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+	sel := &selfdriving.RandomSelector{
+		Logger:            logger,
+		PollInterval:      e.Config.SelfDriving.PollInterval,
+		InputDir:          "/files/in",
+		InputPattern:      e.Config.SelfDriving.InputPattern,
+		WaitForReadyFiles: e.Config.SelfDriving.WaitForReadyFiles,
+	}
+	processor := &selfdriving.Processor{
+		Logger:     logger,
+		Selector:   sel,
+		MoveToDir:  "/files/out/completed",
+		ResultsDir: "/files/out/results",
+		Process:    e.processSelfDrivingFile,
+	}
+	if err := processor.Run(ctx); err != nil {
+		return errors.Wrap(err, "processor")
+	}
+	return nil
+}
+
+func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File) error {
+	log.Println("TODO: process", outputFile)
 	return nil
 }
 

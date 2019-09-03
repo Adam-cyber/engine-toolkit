@@ -2,13 +2,63 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/selfdriving"
 )
+
+func newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
+	pathhash := hash(file.Path)
+	mimetype := mime.TypeByExtension(filepath.Ext(file.Path))
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	if err := w.WriteField("chunkMimeType", mimetype); err != nil {
+		return nil, errors.Wrap(err, "cannot write to multipart writer")
+	}
+	_ = w.WriteField("chunkUUID", pathhash)
+	_ = w.WriteField("chunkIndex", "0")
+	_ = w.WriteField("startOffsetMS", "0")
+	_ = w.WriteField("endOffsetMS", "0")
+	_ = w.WriteField("width", "")                // not supported
+	_ = w.WriteField("height", "")               // not supported
+	_ = w.WriteField("libraryId", "")            // not supported
+	_ = w.WriteField("libraryEngineModelId", "") // not supported
+	_ = w.WriteField("cacheURI", "")             // not supported
+	_ = w.WriteField("veritoneApiBaseUrl", "")   // not supported
+	_ = w.WriteField("token", "")                // not supported
+	_ = w.WriteField("payload", "")              // not supported
+	chunk, err := w.CreateFormFile("chunk", "chunk.data")
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(file.Path)
+	if err != nil {
+		return nil, errors.Wrap(err, "open file")
+	}
+	defer f.Close()
+	if _, err := io.Copy(chunk, f); err != nil {
+		return nil, errors.Wrap(err, "copy to chunk")
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, processURL, &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "veritone-engine-toolkit; self-driving-mode")
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req, nil
+}
 
 func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaChunkMessage) (*http.Request, error) {
 	payload, err := msg.unmarshalPayload()
@@ -60,4 +110,10 @@ func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaC
 	req.Header.Set("User-Agent", "veritone-engine-toolkit")
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	return req, nil
+}
+
+func hash(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
