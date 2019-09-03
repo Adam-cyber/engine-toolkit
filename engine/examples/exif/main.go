@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 
@@ -63,8 +64,9 @@ type response struct {
 }
 
 type vendor struct {
-	Exif      *exif.Exif `json:"exif,omitempty"`
-	ExifError string     `json:"exifError,omitempty"`
+	Exif       *exif.Exif `json:"exif,omitempty"`
+	ExifError  string     `json:"exifError,omitempty"`
+	FormValues url.Values `json:"formValues"`
 }
 
 type item struct {

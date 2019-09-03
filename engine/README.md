@@ -6,7 +6,7 @@ This tool is bundled into engines and becomes the entry point. It is more fully 
 
 To enable file system mode set the following environment variable when running the engine:
 
-`VERITONE_FSMODE=true`
+`VERITONE_SELFDRIVING=true`
 
 Specify the input directory and output directory using docker:
 

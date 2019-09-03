@@ -56,7 +56,7 @@ func run(ctx context.Context) error {
 		eng.testMode = true
 	}
 	if eng.Config.SelfDriving.SelfDrivingMode {
-		eng.logDebug("Running in file system mode (VERITONE_FSMODE)")
+		eng.logDebug("Running in file system mode (VERITONE_SELFDRIVING=true)")
 		skipKafka = true
 	}
 	if !skipKafka {

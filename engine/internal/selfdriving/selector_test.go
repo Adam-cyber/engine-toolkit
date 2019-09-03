@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/matryer/is"
-	"github.com/veritone/engine-toolkit/engine/selfdriving"
+	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
 func TestLock(t *testing.T) {

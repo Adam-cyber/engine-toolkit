@@ -11,25 +11,37 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 
 	"github.com/pkg/errors"
-	"github.com/veritone/engine-toolkit/engine/selfdriving"
+	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
-func newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
+func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
+
 	pathhash := hash(file.Path)
-	mimetype := mime.TypeByExtension(filepath.Ext(file.Path))
+	mimeType := mime.TypeByExtension(filepath.Ext(file.Path))
+	var width, height int
+	if strings.HasPrefix(mimeType, "image") {
+		width, height = e.getImageWidthAndHeight(file.Path)
+	}
+
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	if err := w.WriteField("chunkMimeType", mimetype); err != nil {
+	if err := w.WriteField("chunkMimeType", mimeType); err != nil {
 		return nil, errors.Wrap(err, "cannot write to multipart writer")
 	}
-	_ = w.WriteField("chunkUUID", pathhash)
+	_ = w.WriteField("chunkUUID", "fs-"+pathhash)
 	_ = w.WriteField("chunkIndex", "0")
 	_ = w.WriteField("startOffsetMS", "0")
 	_ = w.WriteField("endOffsetMS", "0")
-	_ = w.WriteField("width", "")                // not supported
-	_ = w.WriteField("height", "")               // not supported
+	_ = w.WriteField("width", strconv.Itoa(width))
+	_ = w.WriteField("height", strconv.Itoa(height))
 	_ = w.WriteField("libraryId", "")            // not supported
 	_ = w.WriteField("libraryEngineModelId", "") // not supported
 	_ = w.WriteField("cacheURI", "")             // not supported
@@ -116,4 +128,22 @@ func hash(text string) string {
 	hasher := md5.New()
 	hasher.Write([]byte(text))
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func (e *Engine) getImageWidthAndHeight(filename string) (int, int) {
+	f, err := os.Open(filename)
+	if err != nil {
+		e.logDebug("getImageWidthAndHeight: cannot open file:", err)
+		return 0, 0
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	if err != nil {
+		e.logDebug("getImageWidthAndHeight: cannot decode image:", err)
+		return 0, 0
+	}
+	b := img.Bounds()
+	width := b.Dx()
+	height := b.Dy()
+	return width, height
 }

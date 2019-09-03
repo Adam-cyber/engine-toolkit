@@ -1,8 +1,10 @@
 githash = $(shell git rev-parse --short HEAD)
 ldflags = -X main.BuildTag=$(githash)
+current_dir = $(shell pwd)
 
 build: clean buildengine builddocker
 run: down buildengine builddocker up
+fsrun: down buildengine builddocker fsup
 runtestmode: down buildengine builddocker uptestmode
 
 buildengine:
@@ -14,6 +16,15 @@ builddocker:
 
 up:
 	docker run -t exif-extraction-engine --name exif-extraction-engine
+
+fsup:
+	docker run \
+		-v $(current_dir)/testdata/fs-engine-in:/files/in \
+		-v $(current_dir)/testdata/fs-engine-completed:/files/out/completed \
+		-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
+		-e "VERITONE_SELFDRIVING=true" \
+		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \
+		-t exif-extraction-engine --name exif-extraction-engine
 
 down:
 	docker rm -f exif-extraction-engine 2>/dev/null || true

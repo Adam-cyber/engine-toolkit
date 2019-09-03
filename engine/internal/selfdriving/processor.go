@@ -2,6 +2,7 @@ package selfdriving
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -48,7 +49,11 @@ func (p *Processor) Run(ctx context.Context) error {
 
 func (p *Processor) processFile(file File) error {
 	now := time.Now()
-	outputFile := filepath.Join(p.ResultsDir, now.Format("2006-01"), now.Format("20060102-1500"), filepath.Base(file.Path)+".json")
+	dir := filepath.Join(p.ResultsDir, now.Format("2006-01"), now.Format("20060102-1500"))
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		return err
+	}
+	outputFile := filepath.Join(dir, filepath.Base(file.Path)+".json")
 	return p.Process(outputFile, file)
 }
 
@@ -57,12 +62,31 @@ func (p *Processor) moveFile(file File) error {
 	_ = os.Remove(file.Path + fileSuffixReady)
 	// move input file
 	dest := filepath.Join(p.MoveToDir, filepath.Base(file.Path))
-	if err := os.Rename(file.Path, dest); err != nil {
-		return errors.Wrap(err, "rename")
+	err := func() error {
+		srcFile, err := os.Open(file.Path)
+		if err != nil {
+			return errors.Wrap(err, "open source file")
+		}
+		defer srcFile.Close()
+		destFile, err := os.Create(dest)
+		if err != nil {
+			return errors.Wrap(err, "create output file")
+		}
+		defer destFile.Close()
+		if _, err := io.Copy(destFile, srcFile); err != nil {
+			return errors.Wrap(err, "copy")
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(file.Path); err != nil {
+		return errors.Wrap(err, "remove source file")
 	}
 	// create new .ready file
-	doneFile := dest + fileSuffixReady
-	if err := os.Symlink(dest, doneFile); err != nil {
+	readyFile := dest + fileSuffixReady
+	if err := os.Symlink(dest, readyFile); err != nil {
 		return err
 	}
 	return nil

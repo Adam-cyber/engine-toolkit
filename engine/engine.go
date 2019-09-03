@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,7 +17,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
-	"github.com/veritone/engine-toolkit/engine/selfdriving"
+	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
 // Engine consumes messages and calls webhooks to
@@ -126,6 +127,7 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	sel := &selfdriving.RandomSelector{
+		Rand:              rand.New(rand.NewSource(time.Now().UnixNano())),
 		Logger:            logger,
 		PollInterval:      e.Config.SelfDriving.PollInterval,
 		InputDir:          "/files/in",
@@ -146,7 +148,8 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 }
 
 func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File) error {
-	req, err := newRequestFromFile(e.Config.Webhooks.Process.URL, file)
+	e.logDebug("processing file:", file)
+	req, err := e.newRequestFromFile(e.Config.Webhooks.Process.URL, file)
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
