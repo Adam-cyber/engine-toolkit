@@ -146,7 +146,23 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 }
 
 func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File) error {
-	log.Println("TODO: process", outputFile)
+	req, err := newRequestFromFile(e.Config.Webhooks.Process.URL, file)
+	if err != nil {
+		return errors.Wrap(err, "new request")
+	}
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	f, err := os.Create(outputFile)
+	if err != nil {
+		return errors.Wrap(err, "create")
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return errors.Wrap(err, "read body")
+	}
 	return nil
 }
 

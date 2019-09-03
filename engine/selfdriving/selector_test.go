@@ -59,8 +59,7 @@ func TestRandomSelector(t *testing.T) {
 	f, err := s.Select(ctx)
 	is.NoErr(err)
 	defer f.Unlock()
-	log.Println("random file:", f)
-	t.Fail()
+	is.True(f.Path != "")
 }
 
 func createTestData(t *testing.T) (string, func()) {

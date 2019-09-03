@@ -47,8 +47,8 @@ func (p *Processor) Run(ctx context.Context) error {
 }
 
 func (p *Processor) processFile(file File) error {
-	time.Sleep(250 * time.Millisecond)
-	outputFile := filepath.Join(p.ResultsDir, filepath.Base(file.Path)+".json")
+	now := time.Now()
+	outputFile := filepath.Join(p.ResultsDir, now.Format("2006-01"), now.Format("20060102-1500"), filepath.Base(file.Path)+".json")
 	return p.Process(outputFile, file)
 }
 

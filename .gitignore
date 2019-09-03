@@ -19,3 +19,4 @@ engine/engine
 
 .DS_Store
 .vscode
+engine/selfdriving/testdata/lockme.txt

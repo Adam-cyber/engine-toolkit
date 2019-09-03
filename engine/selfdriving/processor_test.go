@@ -33,7 +33,7 @@ func TestProcessing(t *testing.T) {
 	}
 	outputDir := filepath.Join(filepath.Dir(inputDir), "output")
 	p := &selfdriving.Processor{
-		Files:      s,
+		Selector:   s,
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  outputDir,
 		ResultsDir: outputDir,
@@ -87,7 +87,7 @@ func TestProcessingPipeline(t *testing.T) {
 	}
 
 	p1 := &selfdriving.Processor{
-		Files:      s1,
+		Selector:   s1,
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output1Dir,
 		ResultsDir: output1Dir,
@@ -98,7 +98,7 @@ func TestProcessingPipeline(t *testing.T) {
 		},
 	}
 	p2 := &selfdriving.Processor{
-		Files:      s2,
+		Selector:   s2,
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output2Dir,
 		ResultsDir: output2Dir,
@@ -109,7 +109,7 @@ func TestProcessingPipeline(t *testing.T) {
 		},
 	}
 	p3 := &selfdriving.Processor{
-		Files:      s3,
+		Selector:   s3,
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output3Dir,
 		ResultsDir: output3Dir,
