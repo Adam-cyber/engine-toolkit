@@ -39,7 +39,7 @@ func (p *Processor) Run(ctx context.Context) error {
 				if errMove := file.Move(p.ErrToDir); errMove != nil {
 					p.Logger.Println("ERROR: move to the error dir:", errMove)
 				} else {
-					p.Logger.Printf("INFO: moved file with errors to %s\n", file.Path)
+					p.Logger.Printf("moved file with errors to %s\n", file.Path)
 					// write the error to a .error file to be able to inspect
 					file.WriteErr(err)
 				}

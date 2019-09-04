@@ -164,12 +164,14 @@ func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File
 		return errors.Wrap(err, "read body")
 	}
 	if resp.StatusCode == http.StatusNoContent {
+		e.logDebug("no content output for file:", file.Path)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
 	}
 	if buf.Len() == 0 {
+		e.logDebug("no data to output for file:", file.Path)
 		return nil
 	}
 	f, err := os.Create(outputFile)
