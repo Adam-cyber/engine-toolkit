@@ -138,6 +138,7 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 		Logger:     logger,
 		Selector:   sel,
 		MoveToDir:  "/files/out/completed",
+		ErrToDir:   "/files/out/errors",
 		ResultsDir: "/files/out/results",
 		Process:    e.processSelfDrivingFile,
 	}
@@ -158,12 +159,25 @@ func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File
 		return err
 	}
 	defer resp.Body.Close()
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, resp.Body); err != nil {
+		return errors.Wrap(err, "read body")
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
+	}
+	if buf.Len() == 0 {
+		return nil
+	}
 	f, err := os.Create(outputFile)
 	if err != nil {
 		return errors.Wrap(err, "create")
 	}
 	defer f.Close()
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	if _, err := io.Copy(f, &buf); err != nil {
 		return errors.Wrap(err, "read body")
 	}
 	return nil

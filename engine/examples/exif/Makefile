@@ -21,6 +21,7 @@ fsup:
 	docker run \
 		-v $(current_dir)/testdata/fs-engine-in:/files/in \
 		-v $(current_dir)/testdata/fs-engine-completed:/files/out/completed \
+		-v $(current_dir)/testdata/fs-engine-errors:/files/out/errors \
 		-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
 		-e "VERITONE_SELFDRIVING=true" \
 		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \

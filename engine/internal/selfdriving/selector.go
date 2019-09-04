@@ -64,6 +64,10 @@ func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 				// ignore processing files
 				return nil
 			}
+			if strings.HasSuffix(path, fileSuffixError) {
+				// ignore error files
+				return nil
+			}
 			if s.WaitForReadyFiles && strings.HasSuffix(path, fileSuffixReady) {
 				// trim off .done
 				path = path[:len(path)-len(fileSuffixReady)]

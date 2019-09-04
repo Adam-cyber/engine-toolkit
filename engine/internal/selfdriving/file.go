@@ -2,6 +2,7 @@ package selfdriving
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -11,6 +12,7 @@ import (
 const (
 	fileSuffixProcessing = ".processing"
 	fileSuffixReady      = ".ready"
+	fileSuffixError      = ".error"
 )
 
 type File struct {
@@ -66,4 +68,14 @@ func (f *File) Move(moveToDir string) error {
 	// update the path of the file
 	f.Path = dest
 	return nil
+}
+
+func (f *File) WriteErr(err error) {
+	if err == nil {
+		return
+	}
+	errorFile := f.Path + fileSuffixError
+	msg := []byte(err.Error())
+	ioutil.WriteFile(errorFile, msg, 0777)
+	return
 }

@@ -21,7 +21,7 @@ func TestProcessing(t *testing.T) {
 	inputDir, cleanup := createTestData(t)
 	defer cleanup()
 	processFunc := func(outputFile string, f selfdriving.File) error {
-		log.Println("TODO: process", f.Path, outputFile)
+		log.Println("testing: process", f.Path, outputFile)
 		time.Sleep(1 * time.Second)
 		return nil
 	}
@@ -32,11 +32,13 @@ func TestProcessing(t *testing.T) {
 		Logger:       log.New(os.Stdout, "", log.LstdFlags),
 	}
 	outputDir := filepath.Join(filepath.Dir(inputDir), "output")
+	errorsDir := filepath.Join(filepath.Dir(inputDir), "errors")
 	p := &selfdriving.Processor{
 		Selector:   s,
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  outputDir,
 		ResultsDir: outputDir,
+		ErrToDir:   errorsDir,
 		Process:    processFunc,
 	}
 	if err := p.Run(ctx); err != nil {
@@ -57,6 +59,8 @@ func TestProcessingPipeline(t *testing.T) {
 	output1Dir := filepath.Join(dir, "2")
 	output2Dir := filepath.Join(dir, "3")
 	output3Dir := filepath.Join(dir, "output")
+
+	errorsDir := filepath.Join(filepath.Dir(dir), "errors")
 	is.NoErr(os.MkdirAll(output1Dir, 0777))
 	is.NoErr(os.MkdirAll(output2Dir, 0777))
 	is.NoErr(os.MkdirAll(output3Dir, 0777))
@@ -91,8 +95,9 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output1Dir,
 		ResultsDir: output1Dir,
+		ErrToDir:   errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
-			log.Println("TODO: process 1:", f.Path, "to", outputFile)
+			log.Println("testing: process 1:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
@@ -102,8 +107,9 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output2Dir,
 		ResultsDir: output2Dir,
+		ErrToDir:   errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
-			log.Println("TODO: process 2:", f.Path, "to", outputFile)
+			log.Println("testing: process 2:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
@@ -113,8 +119,9 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output3Dir,
 		ResultsDir: output3Dir,
+		ErrToDir:   errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
-			log.Println("TODO: process 3:", f.Path, "to", outputFile)
+			log.Println("testing: process 3:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
 			return nil
 		},
