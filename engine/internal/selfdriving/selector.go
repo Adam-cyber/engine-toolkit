@@ -14,28 +14,6 @@ import (
 
 var ErrFileLocked = errors.New("file already locked")
 
-const (
-	fileSuffixProcessing = ".processing"
-	fileSuffixReady      = ".ready"
-)
-
-type File struct {
-	Path string
-}
-
-func (f *File) Lock() error {
-	lockfile := f.Path + fileSuffixProcessing
-	if err := os.Symlink(f.Path, lockfile); err != nil {
-		return ErrFileLocked
-	}
-	return nil
-}
-
-func (f *File) Unlock() {
-	lockfile := f.Path + fileSuffixProcessing
-	os.Remove(lockfile)
-}
-
 type FileSelector interface {
 	Select(ctx context.Context) (File, error)
 }
