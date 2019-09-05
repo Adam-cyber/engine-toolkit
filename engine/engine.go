@@ -174,15 +174,25 @@ func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File
 		e.logDebug("no data to output for file:", file.Path)
 		return nil
 	}
-	f, err := os.Create(outputFile)
+	// write the output file
+	err = func() error {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return errors.Wrap(err, "create")
+		}
+		defer f.Close()
+		if _, err := io.Copy(f, &buf); err != nil {
+			return errors.Wrap(err, "read body")
+		}
+		return nil
+	}()
 	if err != nil {
-		return errors.Wrap(err, "create")
+		return err
 	}
-	defer f.Close()
-	if _, err := io.Copy(f, &buf); err != nil {
-		return errors.Wrap(err, "read body")
-	}
-	return nil
+	// make the output file ready
+	out := selfdriving.File{Path: outputFile}
+	err = out.Ready()
+	return err
 }
 
 // runInference starts the subprocess and routes work to webhooks.

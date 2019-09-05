@@ -41,8 +41,8 @@ Basic flow of Self-Driving:
 - Ignore any files following the input pattern
 - Selects file at random and locks the file
 - Process a file through the engine (each file is a chunk)
-- Save output file (`.json`) to results folder (into time buckets)
-- Move the file to complete dir and unlock the file
+- Save output file (`.json`) to results folder (into time buckets) and set it as `.ready`
+- Move the file to complete dir, unlock the file, and set it as `.ready`
 
 In case of error:
 
