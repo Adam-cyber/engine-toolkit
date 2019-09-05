@@ -32,13 +32,27 @@ func (f *File) Unlock() {
 	os.Remove(lockfile)
 }
 
+func (f *File) Ready() error {
+	readyFile := f.Path + fileSuffixReady
+	return os.Symlink(f.Path, readyFile)
+}
+
+func (f *File) NotReady() {
+	// remove .ready file (if this fails, it's ok)
+	_ = os.Remove(f.Path + fileSuffixReady)
+}
+
 func (f *File) Move(moveToDir string) error {
 	// remove .ready file (if this fails, it's ok)
 	_ = os.Remove(f.Path + fileSuffixReady)
 
+	err := os.MkdirAll(moveToDir, 0777)
+	if err != nil {
+		return err
+	}
 	// move input file (copy & delete is the safest way in containers)
 	dest := filepath.Join(moveToDir, filepath.Base(f.Path))
-	err := func() error {
+	err = func() error {
 		srcFile, err := os.Open(f.Path)
 		if err != nil {
 			return errors.Wrap(err, "open source file")

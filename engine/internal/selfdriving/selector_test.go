@@ -15,34 +15,6 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
-func TestLock(t *testing.T) {
-	is := is.New(t)
-	txt := "lockme.txt"
-	path := filepath.Join("testdata", txt)
-	is.NoErr(os.MkdirAll("testdata", 0777))
-	err := ioutil.WriteFile(path, []byte(txt), 0777)
-	is.NoErr(err)
-	f := selfdriving.File{Path: path}
-
-	// lock
-	err = f.Lock()
-	is.NoErr(err)
-
-	// lock again (should fail)
-	err = f.Lock()
-	is.Equal(err, selfdriving.ErrFileLocked)
-
-	// unlock
-	f.Unlock()
-
-	// lock again (should succeed)
-	err = f.Lock()
-	is.NoErr(err)
-
-	// finally, unlock
-	f.Unlock()
-}
-
 func TestRandomSelector(t *testing.T) {
 	is := is.New(t)
 	ctx := context.Background()
