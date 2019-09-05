@@ -15,6 +15,8 @@ const (
 	fileSuffixError      = ".error"
 )
 
+var ErrFileLocked = errors.New("file already locked")
+
 type File struct {
 	Path string
 }

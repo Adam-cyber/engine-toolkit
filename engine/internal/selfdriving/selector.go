@@ -8,11 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 )
-
-var ErrFileLocked = errors.New("file already locked")
 
 type FileSelector interface {
 	Select(ctx context.Context) (File, error)
