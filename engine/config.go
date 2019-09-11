@@ -27,6 +27,8 @@ type Config struct {
 	Processing struct {
 		// Concurrency is the number of tasks to run concurrently.
 		Concurrency int
+		// DisableChunkDownload disables the automatic download of the chunk.
+		DisableChunkDownload bool
 	}
 	// Stdout is the Engine's stdout. Subprocesses inherit this.
 	Stdout io.Writer
@@ -127,6 +129,7 @@ func NewConfig() Config {
 
 	c.Engine.InstanceID = os.Getenv("ENGINE_INSTANCE_ID")
 	c.Engine.ID = os.Getenv("ENGINE_ID")
+	c.Processing.DisableChunkDownload = os.Getenv("VERITONE_DISABLE_CHUNK_DOWNLOAD") == "true"
 
 	c.Webhooks.Ready.URL = os.Getenv("VERITONE_WEBHOOK_READY")
 	c.Webhooks.Ready.PollDuration = 1 * time.Second

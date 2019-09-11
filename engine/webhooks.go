@@ -23,14 +23,12 @@ import (
 )
 
 func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
-
 	pathhash := hash(file.Path)
 	mimeType := mime.TypeByExtension(filepath.Ext(file.Path))
 	var width, height int
 	if strings.HasPrefix(mimeType, "image") {
 		width, height = e.getImageWidthAndHeight(file.Path)
 	}
-
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	if err := w.WriteField("chunkMimeType", mimeType); err != nil {
@@ -72,7 +70,7 @@ func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*
 	return req, nil
 }
 
-func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaChunkMessage) (*http.Request, error) {
+func (e *Engine) newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaChunkMessage) (*http.Request, error) {
 	payload, err := msg.unmarshalPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal payload")
@@ -95,7 +93,7 @@ func newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaC
 	_ = w.WriteField("veritoneApiBaseUrl", payload.VeritoneAPIBaseURL)
 	_ = w.WriteField("token", payload.Token)
 	_ = w.WriteField("payload", string(msg.TaskPayload))
-	if msg.CacheURI != "" {
+	if !e.Config.Processing.DisableChunkDownload && msg.CacheURI != "" {
 		f, err := w.CreateFormFile("chunk", "chunk.data")
 		if err != nil {
 			return nil, err

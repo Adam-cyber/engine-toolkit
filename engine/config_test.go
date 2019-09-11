@@ -28,8 +28,10 @@ func TestNewConfig(t *testing.T) {
 	os.Setenv("VERITONE_SELFDRIVING_POLLINTERVAL", "5m")
 	os.Setenv("VERITONE_SELFDRIVING_INPUTPATTERN", "*.jpg")
 	os.Setenv("VERITONE_SELFDRIVING_WAITREADYFILES", "true")
+	os.Setenv("VERITONE_DISABLE_CHUNK_DOWNLOAD", "true")
 
 	config := NewConfig()
+	is.Equal(config.Processing.DisableChunkDownload, true)
 	is.Equal(config.Webhooks.Ready.URL, "http://0.0.0.0:8080/readyz")
 	is.Equal(config.Webhooks.Process.URL, "http://0.0.0.0:8080/process")
 	is.Equal(len(config.Kafka.Brokers), 2)

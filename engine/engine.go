@@ -354,7 +354,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	)
 	var content string
 	err := retry.Do(func() error {
-		req, err := newRequestFromMediaChunk(e.client, e.Config.Webhooks.Process.URL, mediaChunk)
+		req, err := e.newRequestFromMediaChunk(e.client, e.Config.Webhooks.Process.URL, mediaChunk)
 		if err != nil {
 			return errors.Wrap(err, "new request")
 		}
