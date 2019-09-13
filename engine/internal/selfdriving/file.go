@@ -18,7 +18,8 @@ const (
 var ErrFileLocked = errors.New("file already locked")
 
 type File struct {
-	Path string
+	Path     string
+	lockPath string
 }
 
 func (f *File) Lock() error {
@@ -26,12 +27,13 @@ func (f *File) Lock() error {
 	if err := os.Symlink(f.Path, lockfile); err != nil {
 		return ErrFileLocked
 	}
+	f.lockPath = lockfile
 	return nil
 }
 
 func (f *File) Unlock() {
-	lockfile := f.Path + fileSuffixProcessing
-	os.Remove(lockfile)
+	// it's ok if this errors, it means it's already unlocked
+	_ = os.Remove(f.lockPath)
 }
 
 func (f *File) Ready() error {
@@ -92,6 +94,6 @@ func (f *File) WriteErr(err error) {
 	}
 	errorFile := f.Path + fileSuffixError
 	msg := []byte(err.Error())
-	ioutil.WriteFile(errorFile, msg, 0777)
+	_ = ioutil.WriteFile(errorFile, msg, 0777)
 	return
 }
