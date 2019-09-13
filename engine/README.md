@@ -11,8 +11,15 @@ To enable file system mode set the following environment variable when running t
 Specify the input directory and output directory using docker:
 
 ```
-TODO
+
 ```
+
+- [ ] Wait for file to finish copying into input folder for non-ready-file situations
+- [ ] Configurable output pattern for folders and mirror it in results, errors, and output folders
+- [ ] Create output log?
+- [ ] Metrics
+- [ ] File checksum
+- [ ] Support files from process webhook
 
 ## Development
 
