@@ -2,18 +2,6 @@
 
 This tool is bundled into engines and becomes the entry point. It is more fully explained in [the documentation](https://machinebox.io/veritone/engine-toolkit#the-engine-executable).
 
-## File system mode
-
-To enable file system mode set the following environment variable when running the engine:
-
-`VERITONE_SELFDRIVING=true`
-
-Specify the input directory and output directory using docker:
-
-```
-
-```
-
 - [ ] Wait for file to finish copying into input folder for non-ready-file situations
 - [ ] Configurable output pattern for folders and mirror it in results, errors, and output folders
 - [ ] Create output log?

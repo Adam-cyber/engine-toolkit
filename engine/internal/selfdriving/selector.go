@@ -22,10 +22,16 @@ func (fn FileSelectorFunc) Select(ctx context.Context) (File, error) {
 
 type RandomSelector struct {
 	Rand *rand.Rand
-
+	// PollInterval is how long to wait after no-suitable files were
+	// found.
 	PollInterval time.Duration
-	Logger       *log.Logger
-	InputDir     string
+	// MinimumModifiedDuration is the amount of time to wait after
+	// a file is modified before considering it for selection.
+	MinimumModifiedDuration time.Duration
+	// Logger is where log output will be sent.
+	Logger *log.Logger
+	// InputDir is the input directory.
+	InputDir string
 	// InputPattern is the glob pattern for input files.
 	// If empty, all files will be matched.
 	InputPattern string
@@ -40,6 +46,9 @@ type RandomSelector struct {
 func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 	if s.PollInterval == 0 {
 		s.PollInterval = 1 * time.Minute
+	}
+	if s.MinimumModifiedDuration == 0 {
+		s.MinimumModifiedDuration = 1 * time.Minute
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -75,6 +84,9 @@ func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 					fileCandidates = append(fileCandidates, path)
 				}
 			} else if !s.WaitForReadyFiles {
+				if time.Now().Sub(info.ModTime()) < s.MinimumModifiedDuration {
+					return nil
+				}
 				match, err := s.matchesInputPattern(path)
 				if err != nil {
 					return err

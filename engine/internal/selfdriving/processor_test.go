@@ -26,10 +26,12 @@ func TestProcessing(t *testing.T) {
 		return nil
 	}
 	s := &selfdriving.RandomSelector{
-		Rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
-		InputDir:     inputDir,
-		InputPattern: "*.txt",
-		Logger:       log.New(os.Stdout, "", log.LstdFlags),
+		Rand:                    rand.New(rand.NewSource(time.Now().UnixNano())),
+		InputDir:                inputDir,
+		InputPattern:            "*.txt",
+		Logger:                  log.New(os.Stdout, "", log.LstdFlags),
+		PollInterval:            100 * time.Millisecond,
+		MinimumModifiedDuration: 100 * time.Millisecond,
 	}
 	outputDir := filepath.Join(filepath.Dir(inputDir), "output")
 	errorsDir := filepath.Join(filepath.Dir(inputDir), "errors")

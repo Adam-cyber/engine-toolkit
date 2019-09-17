@@ -23,10 +23,12 @@ func TestRandomSelector(t *testing.T) {
 	inputDir, cleanup := createTestData(t)
 	defer cleanup()
 	s := &selfdriving.RandomSelector{
-		Rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
-		InputDir:     inputDir,
-		InputPattern: "*.txt",
-		Logger:       log.New(os.Stdout, "", log.LstdFlags),
+		Rand:                    rand.New(rand.NewSource(time.Now().UnixNano())),
+		InputDir:                inputDir,
+		InputPattern:            "*.txt",
+		Logger:                  log.New(os.Stdout, "", log.LstdFlags),
+		PollInterval:            100 * time.Millisecond,
+		MinimumModifiedDuration: 100 * time.Millisecond,
 	}
 	f, err := s.Select(ctx)
 	is.NoErr(err)

@@ -102,6 +102,11 @@ type Config struct {
 		InputPattern string
 		// PollInterval is the time to wait before checking for input files.
 		PollInterval time.Duration
+		// MinimumModifiedDuration is the amount of time to wait after
+		// a file is modified before considering it for selection.
+		// This is used to protect against files that take a long time to
+		// finish copying.
+		MinimumModifiedDuration time.Duration
 		// WaitForReadyFiles will wait for input files to have a `*.ready` marker file
 		// before it will be processed.
 		WaitForReadyFiles bool
@@ -169,6 +174,13 @@ func NewConfig() Config {
 		c.SelfDriving.PollInterval, err = time.ParseDuration(interval)
 		if err != nil {
 			log.Printf("VERITONE_SELFDRIVING_POLLINTERVAL %q: %v", interval, err)
+		}
+	}
+	if interval := os.Getenv("VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION"); interval != "" {
+		var err error
+		c.SelfDriving.MinimumModifiedDuration, err = time.ParseDuration(interval)
+		if err != nil {
+			log.Printf("VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION %q: %v", interval, err)
 		}
 	}
 

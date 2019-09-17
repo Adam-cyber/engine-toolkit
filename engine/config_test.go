@@ -26,6 +26,7 @@ func TestNewConfig(t *testing.T) {
 	os.Setenv("VERITONE_SELFDRIVING", "true")
 	defer os.Setenv("VERITONE_SELFDRIVING", "false")
 	os.Setenv("VERITONE_SELFDRIVING_POLLINTERVAL", "5m")
+	os.Setenv("VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION", "5m")
 	os.Setenv("VERITONE_SELFDRIVING_INPUTPATTERN", "*.jpg")
 	os.Setenv("VERITONE_SELFDRIVING_WAITREADYFILES", "true")
 	os.Setenv("VERITONE_DISABLE_CHUNK_DOWNLOAD", "true")
@@ -61,6 +62,7 @@ func TestNewConfig(t *testing.T) {
 	// self driving
 	is.Equal(config.SelfDriving.SelfDrivingMode, true)
 	is.Equal(config.SelfDriving.PollInterval, 5*time.Minute)
+	is.Equal(config.SelfDriving.MinimumModifiedDuration, 5*time.Minute)
 	is.Equal(config.SelfDriving.WaitForReadyFiles, true)
 	is.Equal(config.SelfDriving.InputPattern, "*.jpg")
 

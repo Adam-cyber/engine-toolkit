@@ -127,12 +127,13 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	sel := &selfdriving.RandomSelector{
-		Rand:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		Logger:            logger,
-		PollInterval:      e.Config.SelfDriving.PollInterval,
-		InputDir:          "/files/in",
-		InputPattern:      e.Config.SelfDriving.InputPattern,
-		WaitForReadyFiles: e.Config.SelfDriving.WaitForReadyFiles,
+		Rand:                    rand.New(rand.NewSource(time.Now().UnixNano())),
+		Logger:                  logger,
+		PollInterval:            e.Config.SelfDriving.PollInterval,
+		MinimumModifiedDuration: e.Config.SelfDriving.MinimumModifiedDuration,
+		InputDir:                "/files/in",
+		InputPattern:            e.Config.SelfDriving.InputPattern,
+		WaitForReadyFiles:       e.Config.SelfDriving.WaitForReadyFiles,
 	}
 	processor := &selfdriving.Processor{
 		Logger:     logger,
