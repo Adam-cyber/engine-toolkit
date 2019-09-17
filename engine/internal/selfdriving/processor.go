@@ -13,15 +13,17 @@ type Processor struct {
 	Selector   FileSelector
 	Process    func(outputFile string, file File) error
 	MoveToDir  string
-	ErrToDir   string
+	ErrDir     string
 	ResultsDir string
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	if err := os.MkdirAll(p.MoveToDir, 0777); err != nil {
+	moveToDir := filepath.Clean(FormatOutputPattern(time.Now(), p.MoveToDir))
+	errDir := filepath.Clean(FormatOutputPattern(time.Now(), p.ErrDir))
+	if err := os.MkdirAll(moveToDir, 0777); err != nil {
 		p.Logger.Println("failed to make output directory:", err)
 	}
-	if err := os.MkdirAll(p.ErrToDir, 0777); err != nil {
+	if err := os.MkdirAll(errDir, 0777); err != nil {
 		p.Logger.Println("failed to make output errors directory:", err)
 	}
 	for {
@@ -36,7 +38,7 @@ func (p *Processor) Run(ctx context.Context) error {
 			defer file.Unlock()
 			if err := p.processFile(file); err != nil {
 				p.Logger.Println("ERROR: process:", err)
-				if errMove := file.Move(p.ErrToDir); errMove != nil {
+				if errMove := file.Move(errDir); errMove != nil {
 					p.Logger.Println("ERROR: move to the error dir:", errMove)
 				} else {
 					p.Logger.Printf("moved file with errors to %s\n", file.Path)
@@ -45,7 +47,7 @@ func (p *Processor) Run(ctx context.Context) error {
 				}
 				return nil
 			}
-			if err := file.Move(p.MoveToDir); err != nil {
+			if err := file.Move(moveToDir); err != nil {
 				p.Logger.Println("ERROR: move file:", err)
 			}
 			return nil
@@ -57,8 +59,7 @@ func (p *Processor) Run(ctx context.Context) error {
 }
 
 func (p *Processor) processFile(file File) error {
-	now := time.Now()
-	dir := filepath.Join(p.ResultsDir, now.Format("2006-01"), now.Format("20060102-1500"))
+	dir := filepath.Clean(FormatOutputPattern(time.Now(), p.ResultsDir))
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}

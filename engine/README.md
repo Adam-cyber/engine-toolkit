@@ -2,7 +2,6 @@
 
 This tool is bundled into engines and becomes the entry point. It is more fully explained in [the documentation](https://machinebox.io/veritone/engine-toolkit#the-engine-executable).
 
-- [ ] Wait for file to finish copying into input folder for non-ready-file situations
 - [ ] Configurable output pattern for folders and mirror it in results, errors, and output folders
 - [ ] Create output log?
 - [ ] Metrics

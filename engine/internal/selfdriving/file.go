@@ -1,10 +1,14 @@
 package selfdriving
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -96,4 +100,27 @@ func (f *File) WriteErr(err error) {
 	msg := []byte(err.Error())
 	_ = ioutil.WriteFile(errorFile, msg, 0777)
 	return
+}
+
+// FormatOutputPattern injects time components into the pattern string.
+// The following strings will be replaced:
+//  yyyy - year
+//  mm - month
+//  dd - day
+//  hh - hour
+//  mm - minute
+//  ss - seconds
+// For example, "year-yyy/mm/dd" creates a folder called "year-2019"
+// inside which would be a folder for the current month, and inside that
+// another folder for the day. The output files will appear inside that
+// folder.
+func FormatOutputPattern(now time.Time, pattern string) string {
+	s := pattern
+	s = strings.Replace(s, "yyyy", strconv.Itoa(now.Year()), -1)
+	s = strings.Replace(s, "mm", fmt.Sprintf("%02d", now.Month()), -1)
+	s = strings.Replace(s, "dd", fmt.Sprintf("%02d", now.Day()), -1)
+	s = strings.Replace(s, "hh", fmt.Sprintf("%02d", now.Hour()), -1)
+	s = strings.Replace(s, "mm", fmt.Sprintf("%02d", now.Minute()), -1)
+	s = strings.Replace(s, "ss", fmt.Sprintf("%02d", now.Second()), -1)
+	return s
 }
