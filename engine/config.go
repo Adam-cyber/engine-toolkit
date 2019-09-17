@@ -100,6 +100,10 @@ type Config struct {
 		SelfDrivingMode bool
 		// InputPattern is the filepath.Glob pattern to use when selecting input files.
 		InputPattern string
+		// OutputDirPattern is the output folder pattern. This path will be appended to each
+		// of the other output paths during processing. OutputDirPattern supports some time
+		// tokens (such as "yyyy" for the current year).
+		OutputDirPattern string
 		// PollInterval is the time to wait before checking for input files.
 		PollInterval time.Duration
 		// MinimumModifiedDuration is the amount of time to wait after
@@ -169,6 +173,7 @@ func NewConfig() Config {
 	c.SelfDriving.SelfDrivingMode = os.Getenv("VERITONE_SELFDRIVING") == "true"
 	c.SelfDriving.WaitForReadyFiles = os.Getenv("VERITONE_SELFDRIVING_WAITREADYFILES") == "true"
 	c.SelfDriving.InputPattern = os.Getenv("VERITONE_SELFDRIVING_INPUTPATTERN")
+	c.SelfDriving.OutputDirPattern = os.Getenv("VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN")
 	if interval := os.Getenv("VERITONE_SELFDRIVING_POLLINTERVAL"); interval != "" {
 		var err error
 		c.SelfDriving.PollInterval, err = time.ParseDuration(interval)

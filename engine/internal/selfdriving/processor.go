@@ -9,17 +9,18 @@ import (
 )
 
 type Processor struct {
-	Logger     *log.Logger
-	Selector   FileSelector
-	Process    func(outputFile string, file File) error
-	MoveToDir  string
-	ErrDir     string
-	ResultsDir string
+	Logger           *log.Logger
+	Selector         FileSelector
+	Process          func(outputFile string, file File) error
+	MoveToDir        string
+	ErrDir           string
+	ResultsDir       string
+	OutputDirPattern string
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	moveToDir := filepath.Clean(FormatOutputPattern(time.Now(), p.MoveToDir))
-	errDir := filepath.Clean(FormatOutputPattern(time.Now(), p.ErrDir))
+	moveToDir := outputPath(p.MoveToDir, p.OutputDirPattern)
+	errDir := outputPath(p.ErrDir, p.OutputDirPattern)
 	if err := os.MkdirAll(moveToDir, 0777); err != nil {
 		p.Logger.Println("failed to make output directory:", err)
 	}
@@ -59,10 +60,14 @@ func (p *Processor) Run(ctx context.Context) error {
 }
 
 func (p *Processor) processFile(file File) error {
-	dir := filepath.Clean(FormatOutputPattern(time.Now(), p.ResultsDir))
+	dir := outputPath(p.ResultsDir, p.OutputDirPattern)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
 	outputFile := filepath.Join(dir, filepath.Base(file.Path)+".json")
 	return p.Process(outputFile, file)
+}
+
+func outputPath(path, pattern string) string {
+	return filepath.Join(path, FormatOutputPattern(time.Now(), pattern))
 }

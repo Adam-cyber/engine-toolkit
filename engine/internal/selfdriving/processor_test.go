@@ -40,7 +40,7 @@ func TestProcessing(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  outputDir,
 		ResultsDir: outputDir,
-		ErrToDir:   errorsDir,
+		ErrDir:     errorsDir,
 		Process:    processFunc,
 	}
 	if err := p.Run(ctx); err != nil {
@@ -97,7 +97,7 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output1Dir,
 		ResultsDir: output1Dir,
-		ErrToDir:   errorsDir,
+		ErrDir:     errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
 			log.Println("testing: process 1:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
@@ -109,7 +109,7 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output2Dir,
 		ResultsDir: output2Dir,
-		ErrToDir:   errorsDir,
+		ErrDir:     errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
 			log.Println("testing: process 2:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)
@@ -121,7 +121,7 @@ func TestProcessingPipeline(t *testing.T) {
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		MoveToDir:  output3Dir,
 		ResultsDir: output3Dir,
-		ErrToDir:   errorsDir,
+		ErrDir:     errorsDir,
 		Process: func(outputFile string, f selfdriving.File) error {
 			log.Println("testing: process 3:", f.Path, "to", outputFile)
 			time.Sleep(250 * time.Millisecond)

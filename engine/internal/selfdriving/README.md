@@ -17,13 +17,14 @@ Example:
 
 ```
 docker run \
-		-v $(current_dir)/testdata/fs-engine-in:/files/in \
-		-v $(current_dir)/testdata/fs-engine-completed:/files/out/completed \
-		-v $(current_dir)/testdata/fs-engine-errors:/files/out/errors \
-		-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
-		-e "VERITONE_SELFDRIVING=true" \
-		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \
-		-t exif-extraction-engine --name exif-extraction-engine
+	-v $(current_dir)/testdata/fs-engine-in:/files/in \
+	-v $(current_dir)/testdata/fs-engine-completed:/files/out/completed \
+	-v $(current_dir)/testdata/fs-engine-errors:/files/out/errors \
+	-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
+	-e "VERITONE_SELFDRIVING=true" \
+	-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \
+	-e "VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd" \
+	-t exif-extraction-engine --name exif-extraction-engine
 ```
 
 Env vars:
@@ -31,6 +32,7 @@ Env vars:
 - `VERITONE_SELFDRIVING=true` (default false) enables self-driving from filesytem
 - `VERITONE_SELFDRIVING_WAITREADYFILES=false` waits to process the file until a `.ready` file exists
 - `VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg` (defaults to empty and process all the files) gob pattern to filter the input files 
+- `VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd` (defaults to empty) pattern for output folders, supports some time tokens (such as "yyyy" for year)
 - `VERITONE_SELFDRIVING_POLLINTERVAL=5m` (defaults 1m) duration to wait between polling intervals to check for new files to processs
 
 

@@ -28,6 +28,7 @@ func TestNewConfig(t *testing.T) {
 	os.Setenv("VERITONE_SELFDRIVING_POLLINTERVAL", "5m")
 	os.Setenv("VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION", "5m")
 	os.Setenv("VERITONE_SELFDRIVING_INPUTPATTERN", "*.jpg")
+	os.Setenv("VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN", "yyyy/mm/dd")
 	os.Setenv("VERITONE_SELFDRIVING_WAITREADYFILES", "true")
 	os.Setenv("VERITONE_DISABLE_CHUNK_DOWNLOAD", "true")
 
@@ -65,5 +66,6 @@ func TestNewConfig(t *testing.T) {
 	is.Equal(config.SelfDriving.MinimumModifiedDuration, 5*time.Minute)
 	is.Equal(config.SelfDriving.WaitForReadyFiles, true)
 	is.Equal(config.SelfDriving.InputPattern, "*.jpg")
+	is.Equal(config.SelfDriving.OutputDirPattern, "yyyy/mm/dd")
 
 }

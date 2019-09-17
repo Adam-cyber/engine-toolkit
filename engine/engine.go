@@ -136,12 +136,13 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 		WaitForReadyFiles:       e.Config.SelfDriving.WaitForReadyFiles,
 	}
 	processor := &selfdriving.Processor{
-		Logger:     logger,
-		Selector:   sel,
-		MoveToDir:  "/files/out/completed",
-		ErrToDir:   "/files/out/errors",
-		ResultsDir: "/files/out/results",
-		Process:    e.processSelfDrivingFile,
+		Logger:           logger,
+		Selector:         sel,
+		OutputDirPattern: e.Config.SelfDriving.OutputDirPattern,
+		MoveToDir:        "/files/out/completed",
+		ErrDir:           "/files/out/errors",
+		ResultsDir:       "/files/out/results",
+		Process:          e.processSelfDrivingFile,
 	}
 	if err := processor.Run(ctx); err != nil {
 		return errors.Wrap(err, "processor")
