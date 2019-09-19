@@ -25,7 +25,7 @@ fsup:
 		-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
 		-e "VERITONE_SELFDRIVING=true" \
 		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \
-		-e "VERITONE_SELFDRIVING_OUTPUTPATTERN=yyyy/mm/dd" \
+		-e "VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd" \
 		-t exif-extraction-engine --name exif-extraction-engine
 
 down:

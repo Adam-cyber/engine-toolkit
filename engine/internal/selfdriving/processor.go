@@ -24,9 +24,6 @@ func (p *Processor) Run(ctx context.Context) error {
 	if err := os.MkdirAll(moveToDir, 0777); err != nil {
 		p.Logger.Println("failed to make output directory:", err)
 	}
-	if err := os.MkdirAll(errDir, 0777); err != nil {
-		p.Logger.Println("failed to make output errors directory:", err)
-	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -44,6 +41,9 @@ func (p *Processor) Run(ctx context.Context) error {
 				} else {
 					p.Logger.Printf("moved file with errors to %s\n", file.Path)
 					// write the error to a .error file to be able to inspect
+					if err := os.MkdirAll(errDir, 0777); err != nil {
+						p.Logger.Println("failed to make output errors directory:", err)
+					}
 					file.WriteErr(err)
 				}
 				return nil
