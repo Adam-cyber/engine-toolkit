@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,32 @@ func TestRandomSelector(t *testing.T) {
 	is.NoErr(err)
 	defer f.Unlock()
 	is.True(f.Path != "")
+}
+
+func TestMultiplePatternsSelector(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	inputDir, cleanup := createTestData(t)
+	defer cleanup()
+	s := &selfdriving.RandomSelector{
+		Rand:                    rand.New(rand.NewSource(time.Now().UnixNano())),
+		InputDir:                inputDir,
+		InputPattern:            "0.txt|1.txt",
+		Logger:                  log.New(os.Stdout, "", log.LstdFlags),
+		PollInterval:            100 * time.Millisecond,
+		MinimumModifiedDuration: 100 * time.Millisecond,
+	}
+	f, err := s.Select(ctx)
+	is.NoErr(err)
+	defer f.Unlock()
+	is.True(strings.HasSuffix(f.Path, "0.txt") || strings.HasSuffix(f.Path, "1.txt"))
+
+	f2, err := s.Select(ctx)
+	is.NoErr(err)
+	defer f2.Unlock()
+	is.True(strings.HasSuffix(f.Path, "0.txt") || strings.HasSuffix(f.Path, "1.txt"))
 }
 
 func createTestData(t *testing.T) (string, func()) {

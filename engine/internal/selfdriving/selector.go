@@ -33,12 +33,14 @@ type RandomSelector struct {
 	// InputDir is the input directory.
 	InputDir string
 	// InputPattern is the glob pattern for input files.
-	// If empty, all files will be matched.
+	// If empty, all files will be matched. Multiple patterns are splitted by `|`
 	InputPattern string
 	// WaitForReadyFiles will only select files that have a .done
 	// file alongside it. This should be used when the output from another
 	// engine is the input to this engine.
 	WaitForReadyFiles bool
+
+	inputPatterns []string
 }
 
 // Select will return a locked file. Unlock must be called on the file.
@@ -50,6 +52,9 @@ func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 	if s.MinimumModifiedDuration == 0 {
 		s.MinimumModifiedDuration = 1 * time.Minute
 	}
+
+	s.parseInputPatterns()
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return File{}, err
@@ -116,9 +121,33 @@ func (s *RandomSelector) Select(ctx context.Context) (File, error) {
 	}
 }
 
-func (s *RandomSelector) matchesInputPattern(path string) (bool, error) {
+func (s *RandomSelector) parseInputPatterns() {
+	s.inputPatterns = []string{}
 	if s.InputPattern == "" {
+		return
+	}
+	patterns := strings.Split(s.InputPattern, "|")
+	for _, p := range patterns {
+		p := strings.TrimSpace(p)
+		if p != "" {
+			s.inputPatterns = append(s.inputPatterns, p)
+		}
+	}
+}
+
+func (s *RandomSelector) matchesInputPattern(path string) (bool, error) {
+	if len(s.inputPatterns) == 0 {
 		return true, nil
 	}
-	return filepath.Match(s.InputPattern, filepath.Base(path))
+	base := filepath.Base(path)
+	for _, pat := range s.inputPatterns {
+		match, err := filepath.Match(pat, base)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			return true, nil
+		}
+	}
+	return false, nil
 }
