@@ -71,6 +71,8 @@ func newKafkaProducer(brokers []string) (Producer, error) {
 	config.Version = sarama.V1_1_0_0
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
+	config.Producer.Compression = sarama.CompressionGZIP
+	config.Producer.MaxMessageBytes = 15 << (10 * 2) // 15 MB
 	config.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	if err := config.Validate(); err != nil {
 		return nil, errors.Wrap(err, "config")
