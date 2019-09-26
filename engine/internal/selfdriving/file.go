@@ -2,6 +2,7 @@ package selfdriving
 
 import (
 	"fmt"
+	"hash/crc32"
 	"io"
 	"io/ioutil"
 	"os"
@@ -50,16 +51,26 @@ func (f *File) NotReady() {
 	_ = os.Remove(f.Path + fileSuffixReady)
 }
 
+// Move moves the source file to the destiation and writes a checksum
+// file and an optional ready file.
 func (f *File) Move(moveToDir string) error {
 	// remove .ready file (if this fails, it's ok)
 	_ = os.Remove(f.Path + fileSuffixReady)
-
 	err := os.MkdirAll(moveToDir, 0777)
 	if err != nil {
 		return err
 	}
 	// move input file (copy & delete is the safest way in containers)
 	dest := filepath.Join(moveToDir, filepath.Base(f.Path))
+	// calculate source checksum
+	checksum, err := f.calculateCRC32()
+	if err != nil {
+		return err
+	}
+	checksumFile := dest + ".sfv"
+	if err := ioutil.WriteFile(checksumFile, []byte(filepath.Base(f.Path)+" "+checksum), 0777); err != nil {
+		return errors.Wrap(err, "write checksum file")
+	}
 	err = func() error {
 		srcFile, err := os.Open(f.Path)
 		if err != nil {
@@ -100,6 +111,20 @@ func (f *File) WriteErr(err error) {
 	msg := []byte(err.Error())
 	_ = ioutil.WriteFile(errorFile, msg, 0777)
 	return
+}
+
+func (f *File) calculateCRC32() (string, error) {
+	src, err := os.Open(f.Path)
+	if err != nil {
+		return "", errors.Wrap(err, "open source file")
+	}
+	defer src.Close()
+	checksum := crc32.NewIEEE()
+	if _, err := io.Copy(checksum, src); err != nil {
+		return "", errors.Wrap(err, "read source file")
+	}
+	checksumStr := fmt.Sprintf("%x", checksum.Sum(nil))
+	return checksumStr, nil
 }
 
 // FormatOutputPattern injects time components into the pattern string.

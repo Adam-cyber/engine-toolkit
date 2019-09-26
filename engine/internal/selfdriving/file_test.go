@@ -80,9 +80,14 @@ func TestMove(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(f.Path, filepath.Join(dst, "moveme.txt"))
 
-	// check for ready
+	// check for ready file
 	_, err = os.Lstat(filepath.Join("testdata", "completed", "moveme.txt.ready"))
-	is.NoErr(err)
+	is.NoErr(err) // ready file
+
+	// check for crc32
+	b, err := ioutil.ReadFile(filepath.Join("testdata", "completed", "moveme.txt.sfv"))
+	is.NoErr(err) // read all sfv file
+	is.Equal(string(b), "moveme.txt 08a8ffd8")
 
 }
 

@@ -2,11 +2,12 @@
 
 This tool is bundled into engines and becomes the entry point. It is more fully explained in [the documentation](https://machinebox.io/veritone/engine-toolkit#the-engine-executable).
 
-- [ ] Configurable output pattern for folders and mirror it in results, errors, and output folders
+- [x] Configurable output pattern for folders and mirror it in results, errors, and output folders
+- [x] Configurable (multiple) input patterns for choose which files to process
+- [x] File checksum
+- [ ] Support files from process webhook
 - [ ] Create output log?
 - [ ] Metrics
-- [ ] File checksum
-- [ ] Support files from process webhook
 
 ## Development
 
