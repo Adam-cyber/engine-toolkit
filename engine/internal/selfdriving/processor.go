@@ -11,7 +11,7 @@ import (
 type Processor struct {
 	Logger           *log.Logger
 	Selector         FileSelector
-	Process          func(outputFile string, file File) error
+	Process          func(outputDir string, file File) error
 	MoveToDir        string
 	ErrDir           string
 	ResultsDir       string
@@ -64,8 +64,7 @@ func (p *Processor) processFile(file File) error {
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
-	outputFile := filepath.Join(dir, filepath.Base(file.Path)+".json")
-	return p.Process(outputFile, file)
+	return p.Process(dir, file)
 }
 
 func outputPath(path, pattern string) string {

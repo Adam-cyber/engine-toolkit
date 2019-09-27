@@ -1,0 +1,16 @@
+{
+	"engineId": "INSERT_YOUR_ENGINE_ID_HERE",
+	"url": "https://veritone.com/",
+	"category": "text",
+	"preferredInputFormat": "text/plain",
+	"engineMode": "chunk",
+	"supportedInputFormats": [
+		"text/plain"
+	],
+	"outputFormats": [
+		"text/plain"
+	],
+	"clusterSize": "small",
+	"intialConcurrency": 50,
+	"maxConcurrency": 50
+}

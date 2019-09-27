@@ -8,9 +8,12 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -150,7 +153,7 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File) error {
+func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File) error {
 	e.logDebug("processing file:", file)
 	req, err := e.newRequestFromFile(e.Config.Webhooks.Process.URL, file)
 	if err != nil {
@@ -161,40 +164,72 @@ func (e *Engine) processSelfDrivingFile(outputFile string, file selfdriving.File
 		return err
 	}
 	defer resp.Body.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, resp.Body); err != nil {
-		return errors.Wrap(err, "read body")
-	}
 	if resp.StatusCode == http.StatusNoContent {
 		e.logDebug("no content output for file:", file.Path)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, resp.Body); err != nil {
+			return errors.Wrap(err, "read body")
+		}
 		return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
 	}
-	if buf.Len() == 0 {
+	if resp.ContentLength == 0 {
 		e.logDebug("no data to output for file:", file.Path)
 		return nil
 	}
-	// write the output file
-	err = func() error {
-		f, err := os.Create(outputFile)
-		if err != nil {
-			return errors.Wrap(err, "create")
-		}
-		defer f.Close()
-		if _, err := io.Copy(f, &buf); err != nil {
-			return errors.Wrap(err, "read body")
+
+	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil {
+		e.logDebug("content type parsing failed, assuming json:", err)
+	}
+
+	// file response
+	if strings.HasPrefix(mediaType, "multipart/") {
+		mr := multipart.NewReader(resp.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return errors.Wrap(err, "reading multipart response")
+			}
+			outputFile := filepath.Join(outputDir, p.FileName())
+			err = writeOutputFile(outputFile, p)
+			if err != nil {
+				return errors.Wrap(err, "writing output file")
+			}
 		}
 		return nil
-	}()
+	}
+
+	// json response
+	outputFile := filepath.Join(outputDir, filepath.Base(file.Path)+".json")
+	err = writeOutputFile(outputFile, resp.Body)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func writeOutputFile(outputFile string, r io.Reader) error {
+	f, err := os.Create(outputFile)
+	if err != nil {
+		return errors.Wrap(err, "create")
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return errors.Wrap(err, "read body")
 	}
 	// make the output file ready
 	out := selfdriving.File{Path: outputFile}
 	err = out.Ready()
-	return err
+	if err != nil {
+		return errors.Wrap(err, "write ready file")
+	}
+	return nil
 }
 
 // runInference starts the subprocess and routes work to webhooks.

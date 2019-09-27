@@ -9,13 +9,13 @@ runtestmode: down buildengine builddocker uptestmode
 
 buildengine:
 	GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o ./dist/engine ../../
-	GOOS=linux GOARCH=amd64 go build -o ./dist/exif-extraction-engine
+	GOOS=linux GOARCH=amd64 go build -o ./dist/touppercase-engine
 
 builddocker:
-	docker build -f Dockerfile -t exif-extraction-engine .
+	docker build -f Dockerfile -t touppercase-engine .
 
 up:
-	docker run -t exif-extraction-engine --name exif-extraction-engine
+	docker run -t touppercase-engine --name touppercase-engine
 
 fsup:
 	docker run \
@@ -24,20 +24,20 @@ fsup:
 		-v $(current_dir)/testdata/fs-engine-errors:/files/out/errors \
 		-v $(current_dir)/testdata/fs-engine-results:/files/out/results \
 		-e "VERITONE_SELFDRIVING=true" \
-		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg" \
+		-e "VERITONE_SELFDRIVING_INPUTPATTERN=*.txt" \
 		-e "VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd" \
 		-e "VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION=1s" \
-		-t exif-extraction-engine --name exif-extraction-engine
+		-t touppercase-engine --name touppercase-engine
 
 down:
-	docker rm -f exif-extraction-engine 2>/dev/null || true
+	docker rm -f touppercase-engine 2>/dev/null || true
 
 uptestmode:
-	docker run -e "VERITONE_TESTMODE=true" -p 9090:9090 -p 8080:8080 --name exif-extraction-engine -t exif-extraction-engine 
+	docker run -e "VERITONE_TESTMODE=true" -p 9090:9090 -p 8080:8080 --name touppercase-engine -t touppercase-engine 
 
 clean:
 	rm -rf ./dist
 
 push:
-	docker tag exif-extraction-engine docker.veritone.com/15170/exif-extraction-engine:beta
-	docker push docker.veritone.com/15170/exif-extraction-engine:beta
+	docker tag touppercase-engine docker.veritone.com/15170/touppercase-engine:beta
+	docker push docker.veritone.com/15170/touppercase-engine:beta

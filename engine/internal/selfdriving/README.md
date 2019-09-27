@@ -34,7 +34,7 @@ Env vars:
 - `VERITONE_SELFDRIVING_INPUTPATTERN=*.jpg` (defaults to empty and process all the files) gob pattern to filter the input files 
 - `VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd` (defaults to empty) pattern for output folders, supports some time tokens (such as "yyyy" for year)
 - `VERITONE_SELFDRIVING_POLLINTERVAL=5m` (defaults 1m) duration to wait between polling intervals to check for new files to processs
-
+- `VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION=2m` (defaults 1m) duration to wait after a file is last modified before the file will be a cadidate for processing
 
 Basic flow of Self-Driving:
 
