@@ -20,6 +20,7 @@ type Consumer interface {
 	Messages() <-chan *sarama.ConsumerMessage
 	// MarkOffset indicates that this message has been processed.
 	MarkOffset(msg *sarama.ConsumerMessage, metadata string)
+	HighWaterMarks() map[string]map[int32]int64
 }
 
 // Producer produces outgoing messages.

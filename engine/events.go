@@ -32,9 +32,12 @@ type event struct {
 	Type string
 
 	// for produce/consume events
-	JobID   string
-	TaskID  string
-	ChunkID string
+	JobID       string
+	TaskID      string
+	ChunkID     string
+	InstanceID  string
+	MessageInfo string
+	ChunkInfo   string
 
 	// for periodic events
 	ProcessingDurationSecs int64
@@ -57,15 +60,16 @@ func (e *Engine) sendEvent(evt event) {
 		Component:    e.Config.Engine.ID,
 		EngineInfo: &EngineInfo{
 			EngineID:               e.Config.Engine.ID,
-			InstanceID:             e.Config.Engine.InstanceID,
+			InstanceID:             evt.InstanceID,
 			BuildID:                buildID,
 			ProcessingDurationSecs: evt.ProcessingDurationSecs,
 			UpDurationSecs:         evt.UpDurationSecs,
 		},
-		Event:   evt.Type,
-		JobID:   evt.JobID,
-		TaskID:  evt.TaskID,
-		ChunkID: evt.ChunkID,
+		MessageInfo: evt.MessageInfo,
+		Event:       evt.Type,
+		JobID:       evt.JobID,
+		TaskID:      evt.TaskID,
+		ChunkID:     evt.ChunkID,
 	}
 	_, _, err := e.eventProducer.SendMessage(&sarama.ProducerMessage{
 		Topic: e.Config.Kafka.EventTopic,
@@ -112,6 +116,13 @@ type edgeEvent struct {
 	TaskID       string      `json:"taskId,omitempty"`       // TaskID this event is associated with (required, except for EngineInstance* events)
 	ChunkID      string      `json:"chunkId,omitempty"`      // ChunkID this event is associated with (required, except for GQLCall, ChunkEOF, GenericEvent, RunTask, and EngineInstance events)
 	EngineInfo   *EngineInfo `json:"engineInfo,omitempty"`   // EngineInfo required only for EngineInstance events
+	MessageInfo  string      `json:"messageInfo,omitempty"`  // Format is object string of MessageInfo
+	ChunkInfo    string      `json:"chunkInfo,omitempty"`    // Chunk info for event ChunkResultProduced, ChunkResultConsumed.
+}
+
+type ChunkInfo struct {
+	ChunkProcessedTimeInMs int64  `json:"chunkProcessedTimeInMs,omitempty"`
+	ChunkStatus            string `json:"chunkStatus,omitempty"`
 }
 
 // EngineInfo contains contextual data for EngineInstance* events

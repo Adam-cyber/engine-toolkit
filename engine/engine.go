@@ -279,6 +279,7 @@ func (e *Engine) runInference(ctx context.Context) error {
 					return
 				}
 				e.consumer.MarkOffset(msg, "")
+				chunkStartTimeMs := time.Now().Unix()
 				select {
 				case <-ctx.Done():
 					return
@@ -291,7 +292,7 @@ func (e *Engine) runInference(ctx context.Context) error {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := e.processMessage(ctx, msg); err != nil {
+					if err := e.processMessage(ctx, msg, chunkStartTimeMs); err != nil {
 						e.logDebug(fmt.Sprintf("processing error: %v", err))
 					}
 					// release the semaphore
@@ -322,7 +323,13 @@ func (e *Engine) runInference(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage) error {
+func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage, chunkStartTimeMs int64) error {
+	fmt.Println("Partition: ", msg.Partition)
+	fmt.Println("Offset: ", msg.Offset)
+	topicMap := e.consumer.HighWaterMarks()[msg.Topic]
+	currentLags := topicMap[msg.Partition] - msg.Offset - 1
+	fmt.Printf("Current Lags: %+v\n", currentLags)
+	messageInfo := fmt.Sprintf("%s:%d:%d:%d", msg.Topic, msg.Partition, msg.Offset, currentLags)
 	start := time.Now()
 	defer func() {
 		now := time.Now()
@@ -336,7 +343,7 @@ func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage
 	}
 	switch typeCheck.Type {
 	case messageTypeMediaChunk:
-		if err := e.processMessageMediaChunk(ctx, msg); err != nil {
+		if err := e.processMessageMediaChunk(ctx, msg, start, messageInfo, chunkStartTimeMs); err != nil {
 			return errors.Wrap(err, "process media chunk")
 		}
 	default:
@@ -346,17 +353,21 @@ func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage
 }
 
 // processMessageMediaChunk processes a single media chunk as described by the sarama.ConsumerMessage.
-func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.ConsumerMessage) error {
+func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.ConsumerMessage, receivedChunkTime time.Time, messageInfo string, chunkStartTimeMs int64) error {
 	var mediaChunk mediaChunkMessage
+	// Add time receive chunk to infoMsg
 	if err := json.Unmarshal(msg.Value, &mediaChunk); err != nil {
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
 	e.sendEvent(event{
-		Key:     mediaChunk.ChunkUUID,
-		Type:    eventConsumed,
-		JobID:   mediaChunk.JobID,
-		TaskID:  mediaChunk.TaskID,
-		ChunkID: mediaChunk.ChunkUUID,
+		Key:                    mediaChunk.ChunkUUID,
+		Type:                   eventConsumed,
+		JobID:                  mediaChunk.JobID,
+		TaskID:                 mediaChunk.TaskID,
+		ChunkID:                mediaChunk.ChunkUUID,
+		InstanceID:             e.Config.Engine.InstanceID,
+		MessageInfo:            messageInfo,
+		ProcessingDurationSecs: time.Now().Unix() - startToolkit,
 	})
 	finalUpdateMessage := chunkResult{
 		Type:      messageTypeChunkResult,
@@ -364,9 +375,45 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		ChunkUUID: mediaChunk.ChunkUUID,
 		Status:    chunkStatusSuccess, // optimistic
 	}
+
+	var retResp map[string]string
+	hasErrorProcessingMessage := false
+
 	defer func() {
+		chunkObject := &ChunkInfo{
+			ChunkProcessedTimeInMs: time.Now().Unix() - chunkStartTimeMs,
+			ChunkStatus:            string(finalUpdateMessage.Status),
+		}
+		chunkInfo, errInfo := json.Marshal(chunkObject)
+		if errInfo != nil {
+			fmt.Println("Cannot Marshal chunkInfo: " + errInfo.Error())
+			chunkInfo = []byte("")
+		}
+		// Initial declaration info message
+		infoMsgStruct := map[string]interface{}{
+			mediaChunk.ChunkUUID: map[string]interface{}{
+				"chunkIndex":                 mediaChunk.ChunkIndex,
+				"getChunkTime":               receivedChunkTime.UTC().Format("2006-01-02T15:04:05Z"),
+				"producingMessageResultTime": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+				"startAwsServiceTime":        retResp["startAwsServiceTime"],
+				"getResultAwsServiceTime":    retResp["getResultAwsServiceTime"],
+				"errorMessage":               finalUpdateMessage.ErrorMsg,
+			},
+		}
 		// send the final (ChunkResult) message
+		infoMsg, errInfo := json.Marshal(infoMsgStruct)
+		if errInfo != nil {
+			fmt.Println("Cannot Marshal InfoMsg: " + errInfo.Error())
+			infoMsg = []byte("")
+		}
+		if hasErrorProcessingMessage == false {
+			finalUpdateMessage.InfoMsg = string(infoMsg)
+		} else {
+			finalUpdateMessage.ErrorMsg = string(infoMsg)
+			finalUpdateMessage.FailureMsg = string(infoMsg)
+		}
 		finalUpdateMessage.TimestampUTC = time.Now().Unix()
+		fmt.Printf("FinalUpdateMessage: %+v\n", finalUpdateMessage)
 		_, _, err := e.producer.SendMessage(&sarama.ProducerMessage{
 			Topic: e.Config.Kafka.ChunkTopic,
 			Key:   sarama.ByteEncoder(msg.Key),
@@ -376,11 +423,15 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 			e.logDebug("WARN", "failed to send final chunk update:", err)
 		}
 		e.sendEvent(event{
-			Key:     mediaChunk.ChunkUUID,
-			Type:    eventProduced,
-			JobID:   mediaChunk.JobID,
-			TaskID:  mediaChunk.TaskID,
-			ChunkID: mediaChunk.ChunkUUID,
+			Key:                    mediaChunk.ChunkUUID,
+			Type:                   eventProduced,
+			JobID:                  mediaChunk.JobID,
+			TaskID:                 mediaChunk.TaskID,
+			ChunkID:                mediaChunk.ChunkUUID,
+			InstanceID:             e.Config.Engine.InstanceID,
+			MessageInfo:            messageInfo,
+			ChunkInfo:              string(chunkInfo),
+			ProcessingDurationSecs: time.Now().Unix() - startToolkit,
 		})
 	}()
 	ignoreChunk := false
@@ -420,6 +471,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		return nil
 	})
 	if err != nil {
+		hasErrorProcessingMessage = true
 		// send error message
 		finalUpdateMessage.Status = chunkStatusError
 		finalUpdateMessage.ErrorMsg = err.Error()

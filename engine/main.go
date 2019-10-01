@@ -6,18 +6,23 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 )
 
 // BuildTag is the githash of this build.
 // It is changed with build tags in the Makefile.
-var BuildTag = "dev"
+var (
+	BuildTag     = "dev"
+	startToolkit = time.Now().Unix()
+)
 
 func main() {
 	fmt.Printf("Veritone Engine Toolkit (%s)\n", BuildTag)
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
+	// ctx = context.WithValue(ctx, start, time.Now())
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	defer func() {
