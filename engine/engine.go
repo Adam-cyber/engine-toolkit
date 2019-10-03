@@ -455,10 +455,10 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 					Name:           p.FileName(),
 					Body:           p,
 				}
-				client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL)
+				client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL+"/v3/graphql")
 				createdAsset, err := assetCreate.Do(ctx, client)
 				if err != nil {
-					return errors.Wrapf(err, "create asset for %s %s", p.FormName(), p.FileName())
+					return errors.Wrapf(err, "create asset for %s", p.FileName())
 				}
 				outputJSON.Media = append(outputJSON.Media, mediaItem{
 					AssetID:     createdAsset.ID,
