@@ -194,28 +194,20 @@ func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File)
 	if strings.HasPrefix(mediaType, "multipart/") {
 		mr := multipart.NewReader(resp.Body, params["boundary"])
 		for {
-			err := func() error {
-				p, err := mr.NextPart()
-				if err == io.EOF {
-					return io.EOF
-				}
-				if err != nil {
-					return errors.Wrap(err, "reading multipart response")
-				}
-				defer p.Close()
-				outputFile := filepath.Join(outputDir, p.FileName())
-				err = writeOutputFile(outputFile, p)
-				if err != nil {
-					return errors.Wrap(err, "writing output file")
-				}
-				return nil
-			}()
+			p, err := mr.NextPart()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				return err
+				return errors.Wrap(err, "reading multipart response")
 			}
+			defer p.Close()
+			outputFile := filepath.Join(outputDir, p.FileName())
+			err = writeOutputFile(outputFile, p)
+			if err != nil {
+				return errors.Wrap(err, "writing output file")
+			}
+			return nil
 		}
 		return nil
 	}
@@ -450,37 +442,29 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 			}
 			mr := multipart.NewReader(resp.Body, params["boundary"])
 			for {
-				err := func() error {
-					p, err := mr.NextPart()
-					if err == io.EOF {
-						return io.EOF
-					}
-					if err != nil {
-						return errors.Wrap(err, "reading multipart response")
-					}
-					assetCreate := AssetCreate{
-						ContainerTDOID: mediaChunk.TDOID,
-						ContentType:    p.Header.Get("Content-Type"),
-						Name:           p.FileName(),
-						Body:           p,
-					}
-					client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL)
-					createdAsset, err := assetCreate.Do(ctx, client)
-					if err != nil {
-						return errors.Wrapf(err, "create asset for %s %s", p.FormName(), p.FileName())
-					}
-					outputJSON.Media = append(outputJSON.Media, mediaItem{
-						AssetID:     createdAsset.ID,
-						ContentType: createdAsset.ContentType,
-					})
-					return nil
-				}()
+				p, err := mr.NextPart()
 				if err == io.EOF {
 					break
 				}
 				if err != nil {
-					return err
+					return errors.Wrap(err, "reading multipart response")
 				}
+				assetCreate := AssetCreate{
+					ContainerTDOID: mediaChunk.TDOID,
+					ContentType:    p.Header.Get("Content-Type"),
+					Name:           p.FileName(),
+					Body:           p,
+				}
+				client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL)
+				createdAsset, err := assetCreate.Do(ctx, client)
+				if err != nil {
+					return errors.Wrapf(err, "create asset for %s %s", p.FormName(), p.FileName())
+				}
+				outputJSON.Media = append(outputJSON.Media, mediaItem{
+					AssetID:     createdAsset.ID,
+					ContentType: createdAsset.ContentType,
+				})
+				return nil
 			}
 			jsonBytes, err := json.Marshal(outputJSON)
 			if err != nil {
