@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"mime"
@@ -21,6 +22,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
+	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
 )
 
 // Engine consumes messages and calls webhooks to
@@ -36,7 +38,11 @@ type Engine struct {
 
 	testMode bool
 
-	client   *http.Client
+	// client is the client to use to make webhook requests.
+	webhookClient *http.Client
+	// graphQLHTTPClient is the client used to access GraphQL.
+	graphQLHTTPClient *http.Client
+
 	logDebug func(args ...interface{})
 
 	// Config holds the Engine configuration.
@@ -53,8 +59,9 @@ func NewEngine() *Engine {
 		logDebug: func(args ...interface{}) {
 			log.Println(args...)
 		},
-		Config: NewConfig(),
-		client: http.DefaultClient,
+		Config:            NewConfig(),
+		webhookClient:     &http.Client{ /* no timeout */ },
+		graphQLHTTPClient: &http.Client{Timeout: 30 * time.Minute},
 	}
 }
 
@@ -159,13 +166,13 @@ func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File)
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
-	resp, err := e.client.Do(req)
+	resp, err := e.webhookClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNoContent {
-		e.logDebug("no content output for file:", file.Path)
+		e.logDebug("ignoring chunk after StatusNoContent:", file.Path)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -179,27 +186,35 @@ func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File)
 		e.logDebug("no data to output for file:", file.Path)
 		return nil
 	}
-
 	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil {
 		e.logDebug("content type parsing failed, assuming json:", err)
 	}
-
 	// file response
 	if strings.HasPrefix(mediaType, "multipart/") {
 		mr := multipart.NewReader(resp.Body, params["boundary"])
 		for {
-			p, err := mr.NextPart()
+			err := func() error {
+				p, err := mr.NextPart()
+				if err == io.EOF {
+					return io.EOF
+				}
+				if err != nil {
+					return errors.Wrap(err, "reading multipart response")
+				}
+				defer p.Close()
+				outputFile := filepath.Join(outputDir, p.FileName())
+				err = writeOutputFile(outputFile, p)
+				if err != nil {
+					return errors.Wrap(err, "writing output file")
+				}
+				return nil
+			}()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				return errors.Wrap(err, "reading multipart response")
-			}
-			outputFile := filepath.Join(outputDir, p.FileName())
-			err = writeOutputFile(outputFile, p)
-			if err != nil {
-				return errors.Wrap(err, "writing output file")
+				return err
 			}
 		}
 		return nil
@@ -391,32 +406,95 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	)
 	var content string
 	err := retry.Do(func() error {
-		req, err := e.newRequestFromMediaChunk(e.client, e.Config.Webhooks.Process.URL, mediaChunk)
+		req, err := e.newRequestFromMediaChunk(e.webhookClient, e.Config.Webhooks.Process.URL, mediaChunk)
 		if err != nil {
 			return errors.Wrap(err, "new request")
 		}
 		req = req.WithContext(ctx)
-		resp, err := e.client.Do(req)
+		resp, err := e.webhookClient.Do(req)
 		if err != nil {
 			return err
 		}
 		defer resp.Body.Close()
-		var buf bytes.Buffer
-		if _, err := io.Copy(&buf, resp.Body); err != nil {
-			return errors.Wrap(err, "read body")
-		}
 		if resp.StatusCode == http.StatusNoContent {
 			ignoreChunk = true
 			return nil
 		}
 		if resp.StatusCode != http.StatusOK {
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, resp.Body); err != nil {
+				return errors.Wrap(err, "read body")
+			}
 			return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
 		}
-		if buf.Len() == 0 {
+		if resp.ContentLength == 0 {
 			ignoreChunk = true
 			return nil
 		}
-		content = buf.String()
+		mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if err != nil {
+			e.logDebug("content type parsing failed, assuming json:", err)
+		}
+		if strings.HasPrefix(mediaType, "multipart/") {
+			// files output
+			payload, err := mediaChunk.unmarshalPayload()
+			if err != nil {
+				return errors.Wrap(err, "unmarshal payload")
+			}
+			type mediaItem struct {
+				AssetID     string `json:"assetId"`
+				ContentType string `json:"contentType"`
+			}
+			var outputJSON struct {
+				Media []mediaItem `json:"media"`
+			}
+			mr := multipart.NewReader(resp.Body, params["boundary"])
+			for {
+				err := func() error {
+					p, err := mr.NextPart()
+					if err == io.EOF {
+						return io.EOF
+					}
+					if err != nil {
+						return errors.Wrap(err, "reading multipart response")
+					}
+					assetCreate := AssetCreate{
+						ContainerTDOID: mediaChunk.TDOID,
+						ContentType:    p.Header.Get("Content-Type"),
+						Name:           p.FileName(),
+						Body:           p,
+					}
+					client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL)
+					createdAsset, err := assetCreate.Do(ctx, client)
+					if err != nil {
+						return errors.Wrapf(err, "create asset for %s %s", p.FormName(), p.FileName())
+					}
+					outputJSON.Media = append(outputJSON.Media, mediaItem{
+						AssetID:     createdAsset.ID,
+						ContentType: createdAsset.ContentType,
+					})
+					return nil
+				}()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return err
+				}
+			}
+			jsonBytes, err := json.Marshal(outputJSON)
+			if err != nil {
+				return errors.Wrap(err, "encode output JSON")
+			}
+			content = string(jsonBytes)
+		} else {
+			// JSON output
+			bodyBytes, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return errors.Wrap(err, "read response body")
+			}
+			content = string(bodyBytes)
+		}
 		return nil
 	})
 	if err != nil {
