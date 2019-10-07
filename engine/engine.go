@@ -51,6 +51,10 @@ type Engine struct {
 	// processing time
 	processingDurationLock sync.RWMutex
 	processingDuration     time.Duration
+
+
+	// Controller specific
+	controller *ControllerUniverse
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
