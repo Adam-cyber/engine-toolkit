@@ -360,14 +360,13 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
 	e.sendEvent(event{
-		Key:                    mediaChunk.ChunkUUID,
-		Type:                   eventConsumed,
-		JobID:                  mediaChunk.JobID,
-		TaskID:                 mediaChunk.TaskID,
-		ChunkID:                mediaChunk.ChunkUUID,
-		InstanceID:             e.Config.Engine.InstanceID,
-		MessageInfo:            messageInfo,
-		ProcessingDurationSecs: time.Now().Unix() - startToolkit,
+		Key:         mediaChunk.ChunkUUID,
+		Type:        eventConsumed,
+		JobID:       mediaChunk.JobID,
+		TaskID:      mediaChunk.TaskID,
+		ChunkID:     mediaChunk.ChunkUUID,
+		InstanceID:  e.Config.Engine.InstanceID,
+		MessageInfo: messageInfo,
 	})
 	finalUpdateMessage := chunkResult{
 		Type:      messageTypeChunkResult,
@@ -423,15 +422,14 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 			e.logDebug("WARN", "failed to send final chunk update:", err)
 		}
 		e.sendEvent(event{
-			Key:                    mediaChunk.ChunkUUID,
-			Type:                   eventProduced,
-			JobID:                  mediaChunk.JobID,
-			TaskID:                 mediaChunk.TaskID,
-			ChunkID:                mediaChunk.ChunkUUID,
-			InstanceID:             e.Config.Engine.InstanceID,
-			MessageInfo:            messageInfo,
-			ChunkInfo:              string(chunkInfo),
-			ProcessingDurationSecs: time.Now().Unix() - startToolkit,
+			Key:         mediaChunk.ChunkUUID,
+			Type:        eventProduced,
+			JobID:       mediaChunk.JobID,
+			TaskID:      mediaChunk.TaskID,
+			ChunkID:     mediaChunk.ChunkUUID,
+			InstanceID:  e.Config.Engine.InstanceID,
+			MessageInfo: messageInfo,
+			ChunkInfo:   string(chunkInfo),
 		})
 	}()
 	ignoreChunk := false

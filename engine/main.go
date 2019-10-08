@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -14,8 +13,7 @@ import (
 // BuildTag is the githash of this build.
 // It is changed with build tags in the Makefile.
 var (
-	BuildTag     = "dev"
-	startToolkit = time.Now().Unix()
+	BuildTag = "dev"
 )
 
 func main() {
