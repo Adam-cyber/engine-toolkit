@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/internal/controller"
 )
 
 // BuildTag is the githash of this build.
@@ -43,6 +44,7 @@ func run(ctx context.Context) error {
 	eng.logDebug("engine: running")
 	defer eng.logDebug("engine: stopped")
 	skipKafka := false
+
 	isTraining, err := isTrainingTask()
 	if err != nil {
 		eng.logDebug("assuming processing task because isTrainingTask error:", err)
@@ -61,7 +63,23 @@ func run(ctx context.Context) error {
 	}
 	if eng.Config.ControllerConfig.ControllerMode {
 		// got to do what we got to do .. contact mother ship
-		eng.controller = newControllerUniverse(&eng.Config.ControllerConfig)
+		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, BuildTag)
+		if err != nil {
+			eng.logDebug("WARNING: Skip getting work from controlle due to error receiving when attempting to register with the controller.  Err=%v", err)
+		} else {
+			skipKafka = true
+			// check on the producing side
+			// TODO MAY NOT NEED THIS
+
+			if !eng.Config.ControllerConfig.SkipOutputToKafka {
+				eng.producer, err = newKafkaProducer(eng.Config.Kafka.Brokers)
+				if err != nil {
+					return errors.Wrap(err, "kafka producer")
+				}
+				// use the same producer for events
+				eng.eventProducer = eng.producer
+			}
+		}
 	}
 	if !skipKafka {
 		eng.logDebug("brokers:", eng.Config.Kafka.Brokers)

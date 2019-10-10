@@ -21,6 +21,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/internal/controller"
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
 )
@@ -52,9 +53,8 @@ type Engine struct {
 	processingDurationLock sync.RWMutex
 	processingDuration     time.Duration
 
-
 	// Controller specific
-	controller *ControllerUniverse
+	controller *controller.ControllerUniverse
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
@@ -83,6 +83,9 @@ func isTrainingTask() (bool, error) {
 
 // Run runs the Engine.
 // Context errors may be returned.
+// TODO For controller route, we need to deal with batch, library engine training from within the loop
+//
+//
 func (e *Engine) Run(ctx context.Context) error {
 	isTraining, err := isTrainingTask()
 	if err != nil {
@@ -105,6 +108,10 @@ func (e *Engine) Run(ctx context.Context) error {
 	if e.Config.SelfDriving.SelfDrivingMode {
 		e.logDebug("running inference in file system mode...")
 		return e.runInferenceFSMode(ctx)
+	}
+	if e.controller != nil {
+		e.logDebug("Running in Controller mode")
+		return e.runViaController(ctx)
 	}
 	e.logDebug("running inference...")
 	return e.runInference(ctx)
@@ -519,6 +526,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 // ready.
 // The channel may receive an error if something goes wrong while waiting
 // for the engine to become ready.
+// QD: Didn't seem to reflect the above comments.  It just polling the webhook for ready?
 func (e *Engine) ready(ctx context.Context) error {
 	start := time.Now()
 	for {

@@ -1,32 +1,17 @@
 package main
 
 import (
-	"time"
+	"encoding/json"
+	"fmt"
+	"github.com/veritone/engine-toolkit/engine/internal/controller"
 	"io"
+	"log"
 	"os"
 	"strconv"
-	"fmt"
 	"strings"
-	"log"
-	"encoding/json"
+	"time"
 )
 
-type ManagedEngineInfo struct {
-	EngineId string `json:"engineId"`
-	EngineMode string `json:"engineMode"`     // batch, stream, chunk
-	EngineCmdLine string `json:"engineCmdLine"`
-}
-
-// enable via the VERITONE_CONTROLLER_CONFIG_JSON=the ControllerConfig
-type VeritoneControllerConfig struct {
-	ControllerMode bool	 `json:"controllerMode"`
-	ControllerUrl string `json:"controllerUrl"`
-	HostId string      `json:"hostId"`
-	SkipOutputToKafka bool `json:"skipOutputToKafka"`
-	Token string `json:"token"`
-	// the map identify the engines that can be managed within this engine toolkit instance
-	ManagedEngines [] ManagedEngineInfo `json:"managedEngines"`
-}
 // Config holds engine configuration settings.
 type Config struct {
 	// Engine contains engine specific configuration and information.
@@ -132,9 +117,8 @@ type Config struct {
 		// before it will be processed.
 		WaitForReadyFiles bool
 	}
-	ControllerConfig VeritoneControllerConfig
+	ControllerConfig controller.VeritoneControllerConfig
 }
-
 
 // NewConfig gets default configuration settings.
 func NewConfig() Config {
@@ -209,12 +193,12 @@ func NewConfig() Config {
 	}
 
 	// controller mode
-	controllerConfig := os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON" )
-	if controllerConfig!="" {
+	controllerConfig := os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")
+	if controllerConfig != "" {
 		// deserialize it
-		err:=json.Unmarshal([]byte(controllerConfig), &c.ControllerConfig)
-		if err==nil {
-			c.ControllerConfig.ControllerMode = true
+		err := json.Unmarshal([]byte(controllerConfig), &c.ControllerConfig)
+		if err == nil {
+			c.ControllerConfig.SetDefaults()
 		} else {
 			c.ControllerConfig.ControllerMode = false
 		}
