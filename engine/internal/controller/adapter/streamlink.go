@@ -39,12 +39,12 @@ func (f *streamlinkReader) Stream(ctx context.Context, duration time.Duration) *
 		}
 
 		log.Printf("%+v", probeOutput)
-		stream.FfmpegFormat = probeOutput.Format.FormatName
+		stream.FfmpegFormat.Name = probeOutput.Format.FormatName
 		return stream
 	}
 
 	stream.MimeType = containerMimeType
-	stream.FfmpegFormat = containerFormat
+	stream.FfmpegFormat.Name = containerFormat
 
 	// pipe stdout of streamlink to stdin of ffmpeg
 	pr, pw := io.Pipe()

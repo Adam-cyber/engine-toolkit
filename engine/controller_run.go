@@ -72,7 +72,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 
 	go e.controller.UpdateEngineInstanceStatus(ctx)
 	// simple loop to get the work
-	var waitElapsedInSeconds  int32
+	var waitElapsedInSeconds int32
 	go func() {
 		for {
 			select {
@@ -96,7 +96,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 					continue
 				} else {
 					//reset
-					waitElapsedInSeconds =0
+					waitElapsedInSeconds = 0
 				}
 				e.processWorkRequest(ctx, batchSize)
 			}
@@ -120,23 +120,22 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	return nil
 }
 
-
 /** a simple process batch job */
 
-func (e *Engine) processWorkRequest(ctx context.Context, batchSize int){
+func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	// here we have N items, we need to iterate thru each one
 	// Forget about concurrency for now.
 	// Do care about timeout
-	ctx, cancel:=context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	processedCount:=0
+	processedCount := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			e.controller.Work(ctx, processedCount)
-			processedCount++  //move on to the next one..
+			processedCount++ //move on to the next one..
 			if processedCount == batchSize {
 				// done
 				return

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/veritone/webstream-adapter/mpd"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/mpd"
 )
 
 const mpegDASHMimeType = "application/dash+xml"

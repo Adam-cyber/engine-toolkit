@@ -26,7 +26,6 @@ const (
 	workRequestActionProcess   = "process"
 	workRequestActionWait      = "wait"
 	workRequestActionTerminate = "terminate"
-
 )
 
 /*
@@ -77,12 +76,11 @@ type VeritoneControllerConfig struct {
 	// the map identify the engines that can be managed within this engine toolkit instance
 	ManagedEngines []ManagedEngineInfo `json:"managedEngines"`
 
-	ProcessingTTLInSeconds int32 `json:"processingTTLInSeconds`
-	LicenseExpirationInSeconds int32 `json:"licenseExpirationInSeconds"`  // 0 == never expires
+	ProcessingTTLInSeconds     int32 `json:"processingTTLInSeconds`
+	LicenseExpirationInSeconds int32 `json:"licenseExpirationInSeconds"` // 0 == never expires
 	// Other
-	IdleWaitTimeoutInSeconds int32 `json:"idleWaitTimeoutInSeconds"`
+	IdleWaitTimeoutInSeconds   int32 `json:"idleWaitTimeoutInSeconds"`
 	IdleQueryIntervalInSeconds int32 `json:"idleQueryIntervalInSeconds"`
-
 }
 
 func (c *VeritoneControllerConfig) SetDefaults() {
@@ -100,7 +98,7 @@ func (c *VeritoneControllerConfig) SetDefaults() {
 	if c.IdleQueryIntervalInSeconds == 0 {
 		c.IdleQueryIntervalInSeconds = 5 // between waiting for work to come in..
 	}
-	if c.ProcessingTTLInSeconds == 0{
+	if c.ProcessingTTLInSeconds == 0 {
 		c.ProcessingTTLInSeconds = 3600 * 2
 	}
 }

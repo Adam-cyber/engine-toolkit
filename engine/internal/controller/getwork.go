@@ -3,9 +3,12 @@ package controller
 import (
 	"context"
 	"github.com/antihax/optional"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"log"
 	"time"
+
+	"fmt"
 )
 
 /**
@@ -65,13 +68,13 @@ func (c *ControllerUniverse) GetWorks(ctx context.Context) (done bool, waitForMo
 		c.controllerAPIClient.EngineApi.TerminateEngineInstance(
 			context.WithValue(ctx, controllerClient.ContextAccessToken,
 				c.engineInstanceRegistrationInfo.EngineInstanceToken),
-			c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts {
-				XCorrelationId:optional.NewInterface(c.correlationId),
+			c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts{
+				XCorrelationId: optional.NewInterface(c.correlationId),
 			})
 		// bye bye
-		return true, false, 0,nil // TODO also put some thing into some channel to say that we're done?
+		return true, false, 0, nil // TODO also put some thing into some channel to say that we're done?
 	case workRequestActionWait:
-		return false, true, 0,nil
+		return false, true, 0, nil
 	}
 	// now we have a new batch of work
 	c.batchLock.Lock()
@@ -116,28 +119,55 @@ func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.curTaskStatusUpdatesForTheBatch[index].TaskStatus = status
 }
 
-// TODO start the heart beat for the task -- see the item..
+// TODO start the heart beat for the task
+// Heartbeat -- could have the info = the engine instance status update for the task
 func (c *ControllerUniverse) startHeartbeat(ctx context.Context, item *controllerClient.EngineInstanceWorkItem) {
 	// placeholder
+	log.Println("TODO TODO TODO HEARTBEAT FOR NON-CHUNK ENGINE")
 }
 
 // Work on the index-th item of the currentWorkItemsInABatch
-func (c *ControllerUniverse) Work(ctx context.Context, index int) (err error){
-	curWorkItem:=c.curWorkItemsInABatch[index]
+func (c *ControllerUniverse) Work(ctx context.Context, index int) {
+	curWorkItem := c.curWorkItemsInABatch[index]
+	curStatus := c.curTaskStatusUpdatesForTheBatch[index]
 	c.updateTaskStatus(index, "running")
-
-
-	if curWorkItem.EngineType!="chunk" {
+	method := fmt.Sprintf("[ControllerUniverse.Work (%s:%s)]", c.curWorkRequestId,
+		curWorkItem.InternalTaskId)
+	// make sure we have some payload!
+	payloadJSON, err := InterfaceToString(curWorkItem.TaskPayload)
+	if payloadJSON == "" || err != nil {
+		// an error!!!
+		// should fail it -- What to do with failure!
+		c.batchLock.Lock()
+		curStatus.FailureReason = "Missing taskPayload"
+		curStatus.ErrorCount++
+		curStatus.TaskStatus = "failed"
+		c.batchLock.Unlock()
+		return
+	}
+	if curWorkItem.EngineType != "chunk" {
 		// start the heartbeat back to the kafka engine_status topic .. but do we have that set up at all?
 		go c.startHeartbeat(ctx, &curWorkItem)
 	}
 
-	// now let's figure out where we are
+	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
 	switch curWorkItem.EngineId {
-	case engineIdTVRA: fallthrough
-	case engineIdWSA : // TODO
+	case engineIdTVRA:
+		fallthrough
+		// make sure they are the same
+	case engineIdWSA:
+		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId, &curWorkItem, &curStatus, &c.batchLock)
+		if err == nil {
+			err = adapter.Run()
+			adapter.Close()
+		}
+		if err != nil {
+			// print stuff
+			log.Printf("%s, Failed to run, err=%v", method, err)
+		}
+
 	case engineIdSI2: // TODO
 	default:
-		// TODO BIG TIME
+		panic("TO BE IMPLEMENTED")
 	}
 }

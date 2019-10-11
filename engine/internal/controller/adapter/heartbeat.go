@@ -8,7 +8,7 @@ import (
 
 	"github.com/c2h5oh/datasize"
 	"github.com/veritone/edge-messages"
-	"github.com/veritone/webstream-adapter/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 )
 
 type bytesReadTracker interface {

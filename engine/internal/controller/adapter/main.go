@@ -2,8 +2,8 @@ package adapter
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"log"
 	"net"
 	"net/http"
@@ -17,20 +17,17 @@ import (
 
 	messages "github.com/veritone/edge-messages"
 	"github.com/veritone/edge-stream-ingestor/streamio"
-	"github.com/veritone/realtime/modules/scfs"
-	"github.com/veritone/webstream-adapter/api"
-	"github.com/veritone/webstream-adapter/messaging"
+
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
+	controllerClient "github.com/veritone/realtime/modules/controller/client"
+
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
 )
 
 const (
 	appName     = "webstream-adapter"
 	maxAttempts = 5
-)
-
-// Build flags set at build time (see Makefile)
-var (
-	BuildCommitHash string // BuildCommitHash is the commit hash of the build
-	BuildTime       string // BuildTime is the time of the build
 )
 
 var (
@@ -54,23 +51,50 @@ type Streamer interface {
 	Stream(ctx context.Context, dur time.Duration) *streamio.Stream
 }
 
-func init() {
-	streamio.Logger = log.New(os.Stderr, "[stream] ", log.LstdFlags)
+type Adaptor struct {
+	engineInstanceId string
+	workItem         *controllerClient.EngineInstanceWorkItem
+	workItemStatus   *controllerClient.TaskStatusUpdate
+	statusLock       *sync.Mutex
+
+	payload *enginePayload
+	config  *engineConfig
+
+	apiToken    string
+	httpClient  *http.Client
+	kafkaClient messaging.Client
 }
 
-func AdaptorMain() {
-	// Log build info
-	log.Printf("Build time: %s, Build commit hash: %s", BuildTime, BuildCommitHash)
+func (a *Adaptor) Close() {
+	if a.kafkaClient != nil {
+		a.kafkaClient.Close()
+	}
+}
 
-	config, payload, err := loadConfigAndPayload()
+func NewAdaptor(payloadJSON string,
+	engineInstanceId string,
+	workItem *controllerClient.EngineInstanceWorkItem,
+	workItemStatus *controllerClient.TaskStatusUpdate,
+	statusLock *sync.Mutex) (res *Adaptor, err error) {
+
+	method := fmt.Sprintf("[AdaptorMain:%s]", engineInstanceId)
+	config, payload, err := loadConfigAndPayload(payloadJSON, workItem.EngineId, engineInstanceId)
 	if err != nil {
-		log.Fatal("Error initializing payload and config: ", err)
+		// TODO better error ...
+		statusLock.Lock()
+		workItemStatus.TaskStatus = "failed"
+		workItemStatus.ErrorCount++
+		workItemStatus.FailureReason = fmt.Sprintf("Internal")
+		workItemStatus.TaskOutput = map[string]interface{}{"error": fmt.Sprintf("Failed to load config and payload, err=%v", err)}
+		statusLock.Unlock()
+		log.Printf("%s failed to load payload or config, err=%v", method, err)
+		return nil, errors.Wrapf(err, "%s failed in loading payload/config", method)
 	}
 
 	log.Printf("config=%s", config)
 	log.Printf("payload=%s", payload)
 
-	streamio.TextMimeTypes = config.SupportedTextMimeTypes
+	streamio.TextMimeTypes = config.SupportedTextMimeTypes // weird!!
 
 	// payload token overrides token from environment variable
 	apiToken := os.Getenv("VERITONE_API_TOKEN")
@@ -78,45 +102,64 @@ func AdaptorMain() {
 		apiToken = payload.Token
 	}
 
+	// for now this is needed to send heartbeats?
+	// so keep it here until we move to the controller's work loop
 	config.Messaging.Kafka.ClientIDPrefix = appName + "_"
 	kafkaClient, err := messaging.NewKafkaClient(config.Messaging.Kafka)
 	if err != nil {
-		log.Fatal(err)
+		statusLock.Lock()
+		workItemStatus.ErrorCount++ // do we need to care for now?
+		statusLock.Unlock()
+		log.Printf("%s got error in establishing Kafka client -- ignore for now. Err=%v", method, err)
 	}
-	defer kafkaClient.Close()
 
+	// TODO this is specific to WSA but we may want to keep it here.
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			DialContext:         (&net.Dialer{Timeout: httpStreamerTCPTimeout}).DialContext,
 			TLSHandshakeTimeout: httpStreamerTLSTimeout,
 		},
 	}
-	if err := initAndRun(config, payload, apiToken, kafkaClient, httpClient); err != nil {
-		log.Fatalf("TASK FAILED [%s]: %s", payload.TaskID, err)
-	}
 
-	log.Println("done")
+	return &Adaptor{
+		engineInstanceId: engineInstanceId,
+		workItem:         workItem,
+		workItemStatus:   workItemStatus,
+		statusLock:       statusLock,
+		apiToken:         apiToken,
+		payload:          payload,
+		config:           config,
+		httpClient:       httpClient,
+		kafkaClient:      kafkaClient,
+	}, nil
 }
 
-func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, kafkaClient messaging.Client, httpClient *http.Client) (err error) {
+func (a *Adaptor) Run() (err error) {
+	method := fmt.Sprintf("[Adaptor.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Create messaging helper - used for heartbeats and stream writer
-	msgr := messaging.NewHelper(kafkaClient, config.Messaging, messaging.MessageContext{
-		JobID:      payload.JobID,
-		TaskID:     payload.TaskID,
-		TDOID:      payload.TDOID,
-		EngineID:   config.EngineID,
-		InstanceID: config.EngineInstanceID,
+	msgr := messaging.NewHelper(a.kafkaClient, a.config.Messaging, messaging.MessageContext{
+		JobID:      a.payload.JobID,
+		TaskID:     a.payload.TaskID,
+		TDOID:      a.payload.TDOID,
+		EngineID:   a.config.EngineID,
+		InstanceID: a.config.EngineInstanceID,
 	})
 
 	// stream writer
 	var sw streamio.StreamWriter
 	var onCloseFn func(error, int64)
 
-	// always run ScfsStreamWriter
-	scfsStreamWriter, err := scfs.InitScfsStreamWriter(strconv.FormatInt(payload.OrganizationID, 10), payload.JobID, payload.TaskID, payload.ScfsWriterBufferSize)
+	// get the taskIO for output stream
+	// have to find the output
+	outputScfsArr, err := scfsio.GetIOForWorkItem(a.workItem, "output")
+	if err != nil {
+		return errors.Wrapf(err, "%s failed to get OutputIO", method)
+	}
+	// for now, we're going to just assume 1 output???
+	scfsStreamWriter := NewSCFSIOWriter(outputScfsArr[0].String(), outputScfsArr[0].ScfsIO, a.payload.ChunkSize)
 	if err != nil {
 		return errorReason{
 			err,
@@ -129,25 +172,25 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 	if *stdoutFlag {
 		// stdout stream writer
 		sw = streamio.NewFileStreamWriter(os.Stdout)
-	} else if payload.isOfflineMode() && !payload.DisableS3 {
+	} else if a.payload.isOfflineMode() && !a.payload.DisableS3 {
 		// when payload "CacheToS3Key" is available, webstream adapter is in "offline ingestion" mode
 		cacheCfg := streamio.S3CacheConfig{
-			Bucket:      config.OutputBucketName,
-			Region:      config.OutputBucketRegion,
-			MinioServer: config.MinioServer,
+			Bucket:      a.config.OutputBucketName,
+			Region:      a.config.OutputBucketRegion,
+			MinioServer: a.config.MinioServer,
 		}
 
 		// callback called when the S3 writer has finished writing the file
 		onFinishFn := func(url string, startTime int64, endTime int64) {
 			msg := messages.EmptyOfflineIngestionRequest()
-			msg.ScheduledJobID = payload.ScheduledJobID
-			msg.SourceID = payload.SourceID
+			msg.ScheduledJobID = a.payload.ScheduledJobID
+			msg.SourceID = a.payload.SourceID
 			msg.MediaURI = url
 			msg.StartTime = startTime
 			msg.EndTime = endTime
-			msg.SourceTaskSummary.OrgID = strconv.FormatInt(payload.OrganizationID, 10)
-			msg.SourceTaskSummary.JobID = payload.JobID
-			msg.SourceTaskSummary.TaskID = payload.TaskID
+			msg.SourceTaskSummary.OrgID = strconv.FormatInt(a.payload.OrganizationID, 10)
+			msg.SourceTaskSummary.JobID = a.payload.JobID
+			msg.SourceTaskSummary.TaskID = a.payload.TaskID
 			if hb != nil {
 				msg.SourceTaskSummary.BytesRead = hb.BytesRead()
 				msg.SourceTaskSummary.BytesWritten = hb.BytesWritten()
@@ -173,7 +216,7 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 		}
 
 		log.Println("Enabling S3 Stream Writer")
-		s3StreamWriter, err := NewS3StreamWriter(payload.CacheToS3Key, cacheCfg, onFinishFn)
+		s3StreamWriter, err := NewS3StreamWriter(a.payload.CacheToS3Key, cacheCfg, onFinishFn)
 		if err != nil {
 			return errorReason{
 				err,
@@ -181,7 +224,7 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 			}
 		}
 
-		sw, err = scfs.NewTeeStreamWriter(s3StreamWriter, scfsStreamWriter)
+		sw, err = NewTeeStreamWriter(s3StreamWriter, scfsStreamWriter)
 		if err != nil {
 			return errorReason{
 				err,
@@ -189,43 +232,11 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 			}
 		}
 
-	} else if !payload.DisableKafka {
-
-		log.Println("Enabling Kafka Stream Writer")
-		kafkaStreamWriter := messaging.NewMessageStreamWriter(msgr, messaging.MessageStreamWriterConfig{
-			Topic:     config.OutputTopicName,
-			Partition: config.OutputTopicPartition,
-			KeyPrefix: config.OutputTopicKeyPrefix,
-		})
-
-		sw, err = scfs.NewTeeStreamWriter(kafkaStreamWriter, scfsStreamWriter)
-		if err != nil {
-			return errorReason{
-				err,
-				messages.FailureReasonFileWriteError,
-			}
-		}
-
-		onCloseFn = func(err error, _ int64) {
-
-			// ensure a stream EOF is always sent if an error occurred before writing the stream
-			if err == nil || kafkaStreamWriter.BytesWritten() > 0 {
-				return
-			}
-
-			// use a timeout in case the error was due to kafka failure
-			sctx, cancel := context.WithTimeout(ctx, time.Second*10)
-			defer cancel()
-
-			if err := writeEmptyStream(sctx, kafkaStreamWriter); err != nil {
-				log.Println("failed to write empty stream:", err)
-			}
-		}
 	}
 
 	// start engine status heartbeats
-	heartbeatInterval, _ := time.ParseDuration(config.HeartbeatInterval)
-	hb = startHeartbeat(ctx, msgr, heartbeatInterval, sw, payload.isOfflineMode())
+	heartbeatInterval, _ := time.ParseDuration(a.config.HeartbeatInterval)
+	hb = startHeartbeat(ctx, msgr, heartbeatInterval, sw, a.payload.isOfflineMode())
 
 	defer func() {
 		if onCloseFn != nil {
@@ -245,15 +256,15 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 
 	// determine source URL
 	var isLive bool
-	url := payload.URL
+	url := a.payload.URL
 	if url == "" {
 		var sourceDetails api.SourceDetails
-		if payload.SourceDetails != nil {
-			sourceDetails = *payload.SourceDetails
+		if a.payload.SourceDetails != nil {
+			sourceDetails = *a.payload.SourceDetails
 			isLive = true // assume offline ingestion mode is used for live streams only
 		} else {
 			// fetch the URL from the Source configuration
-			coreAPIClient, err := api.NewCoreAPIClient(config.VeritoneAPI, apiToken)
+			coreAPIClient, err := api.NewCoreAPIClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
 				return errorReason{
 					fmt.Errorf("failed to initialize core API client: %s", err),
@@ -261,10 +272,10 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 				}
 			}
 
-			source, err := coreAPIClient.FetchSource(ctx, payload.SourceID)
+			source, err := coreAPIClient.FetchSource(ctx, a.payload.SourceID)
 			if err != nil {
 				return errorReason{
-					fmt.Errorf("failed to fetch source %q: %s", payload.SourceID, err),
+					fmt.Errorf("failed to fetch source %q: %s", a.payload.SourceID, err),
 					messages.FailureReasonURLNotFound,
 				}
 			}
@@ -279,13 +290,13 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 			url = sourceDetails.RadioStreamURL
 		} else {
 			return errorReason{
-				fmt.Errorf("source %q does not have a URL field set", payload.SourceID),
+				fmt.Errorf("source %q does not have a URL field set", a.payload.SourceID),
 				messages.FailureReasonAPINotFound,
 			}
 		}
 	}
 
-	isLive = isLive || payload.isTimeBased()
+	isLive = isLive || a.payload.isTimeBased()
 	log.Printf("Stream URL: %s Live: %v", url, isLive)
 
 	// set up the stream reader
@@ -298,13 +309,13 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 	case httpURLRegexp.MatchString(url):
 		// hack: provide JWT as Authorization header for media-streamer URLs
 		if strings.Contains(url, "veritone") && strings.Contains(url, "/media-streamer/stream") {
-			httpClient, err = api.NewAuthenticatedHTTPClient(config.VeritoneAPI, apiToken)
+			a.httpClient, err = api.NewAuthenticatedHTTPClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
 				return fmt.Errorf("http client err: %s", err)
 			}
 		}
 
-		isImage, isText, mimeType, err := checkMIMEType(ctx, url, *httpClient)
+		isImage, isText, mimeType, err := checkMIMEType(ctx, url, *a.httpClient)
 		if err != nil && err != streamio.ErrUnknownMimeType {
 			return errorReason{
 				err,
@@ -316,20 +327,20 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 		}
 		if isImage || isText {
 			log.Println("Using HTTP Reader.")
-			sr = newHTTPStreamer(httpClient, url)
+			sr = newHTTPStreamer(a.httpClient, url)
 			break
 		}
 		if strings.HasPrefix(mimeType, mpjpegMimeType) ||
 			urlHasFileExtension(url, ".mjpeg", ".mjpg", ".cgi") {
 			log.Println("Using MJPEG Reader.")
-			sr = newMJPEGReader(config.FFMPEG, url)
+			sr = newMJPEGReader(a.config.FFMPEG, url)
 			break
 		}
 		if strings.HasPrefix(mimeType, mpegDASHMimeType) {
 			// hack: streamlink has a bug where it doesn't return any valid streams when the DASH manifest
 			// only has a single audio stream and no video. Clone the manifest on disk and insert a dummy
 			// audio stream to work around this.
-			url, err = patchMPD(ctx, url, httpClient)
+			url, err = patchMPD(ctx, url, a.httpClient)
 			if err != nil {
 				log.Println("failed to patch DASH manifest for streamlink:", err)
 			}
@@ -343,14 +354,14 @@ func initAndRun(config *engineConfig, payload *enginePayload, apiToken string, k
 			sr = newStreamlinkReader(url)
 		} else if isLive {
 			log.Println("Using FFMPEG Reader.")
-			sr = newFFMPEGReader(config.FFMPEG, url)
+			sr = newFFMPEGReader(a.config.FFMPEG, url)
 		} else {
 			log.Println("Using HTTP Reader.")
-			sr = newHTTPStreamer(httpClient, url)
+			sr = newHTTPStreamer(a.httpClient, url)
 		}
 	}
 
-	return ingestStream(ctx, payload, isLive, sr, sw)
+	return ingestStream(ctx, a.payload, isLive, sr, sw)
 }
 
 func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr Streamer, sw streamio.StreamWriter) error {

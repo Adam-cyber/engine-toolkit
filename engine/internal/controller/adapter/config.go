@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/veritone/webstream-adapter/api"
-	"github.com/veritone/webstream-adapter/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 )
 
 const defaultHeartbeatInterval = "5s"
-const defaultConfigFilePath = "./config.json"
+const defaultConfigFilePath = "./adapter/config.json" // this should be copied over by Dockerfile
 
 var (
 	payloadFlag = flag.String("payload", "", "payload file")
@@ -82,6 +82,9 @@ type taskPayload struct {
 	DisableS3            bool               `json:"disableS3,omitempty"`
 	ScfsWriterBufferSize int                `json:"scfsWriterBufferSize,omitempty"`
 	OrganizationID       int64              `json:"organizationId,omitempty"`
+
+	// Optional here in the payload to see if this will speed up anything.. default is like 10K?
+	ChunkSize int64 `json:"chunkSize,omitempty"`
 }
 
 type enginePayload struct {
@@ -105,6 +108,9 @@ func (p *enginePayload) defaults() {
 	}
 	if urlFlag != nil && *urlFlag != "" {
 		p.URL = *urlFlag
+	}
+	if p.ChunkSize == 0 {
+		p.ChunkSize = 16 * 1024 //16K
 	}
 }
 
@@ -185,12 +191,12 @@ func loadConfigFromFile(c interface{}, configFilePath string) error {
 	return json.NewDecoder(reader).Decode(c)
 }
 
-func loadConfigAndPayload(payloadJSON string) (*engineConfig, *enginePayload, error) {
+func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string) (*engineConfig, *enginePayload, error) {
 	payload, config := new(enginePayload), new(engineConfig)
 
-		if err := json.Unmarshal([]byte(payloadJSON), payload); err != nil {
-			return config, payload, fmt.Errorf("failed to unmarshal payload JSON: %s", err)
-		}
+	if err := json.Unmarshal([]byte(payloadJSON), payload); err != nil {
+		return config, payload, fmt.Errorf("failed to unmarshal payload JSON: %s", err)
+	}
 
 	payload.defaults()
 	if err := payload.validate(); err != nil {
@@ -203,12 +209,9 @@ func loadConfigAndPayload(payloadJSON string) (*engineConfig, *enginePayload, er
 	}
 	config.defaults()
 
-	if engineID := os.Getenv("ENGINE_ID"); len(engineID) > 0 {
-		config.EngineID = engineID
-	}
-	if engineInstanceID := os.Getenv("ENGINE_INSTANCE_ID"); len(engineInstanceID) > 0 {
-		config.EngineInstanceID = engineInstanceID
-	}
+	config.EngineID = engineID
+	config.EngineInstanceID = engineInstanceID
+
 	if kafkaBrokers := os.Getenv("KAFKA_BROKERS"); len(kafkaBrokers) > 0 {
 		config.Messaging.Kafka.Brokers = strings.Split(kafkaBrokers, ",")
 	}
@@ -231,7 +234,7 @@ func loadConfigAndPayload(payloadJSON string) (*engineConfig, *enginePayload, er
 		config.OutputBucketRegion = region
 	}
 
-	config.VeritoneAPI.CorrelationID = "webstreamAdapter:" + config.EngineInstanceID
+	config.VeritoneAPI.CorrelationID = engineID + ":" + config.EngineInstanceID
 
 	return config, payload, config.validate()
 }
