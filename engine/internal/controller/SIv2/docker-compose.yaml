@@ -1,0 +1,25 @@
+version: '2.1'
+
+services:
+  app:
+    image: stream-ingestor
+    build: .
+    command: -payload payload.json
+    links:
+      - kafka
+    environment:
+      - VERITONE_API_TOKEN
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_DEFAULT_REGION
+    restart: always
+
+  kafka:
+    image: spotify/kafka
+    hostname: kafka
+    environment:
+      ADVERTISED_HOST: kafka
+      ADVERTISED_PORT: 9092
+    ports:
+      - "2181:2181"
+      - "9092:9092"

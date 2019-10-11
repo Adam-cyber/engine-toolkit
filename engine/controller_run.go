@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-	"github.com/prometheus/procfs"
 )
 
 /**
@@ -54,6 +53,8 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var cmd *exec.Cmd
+
+	// Future migration of other engines --> so keep here
 	if len(e.Config.Subprocess.Arguments) > 0 {
 		cmd = exec.CommandContext(ctx, e.Config.Subprocess.Arguments[0], e.Config.Subprocess.Arguments[1:]...)
 		cmd.Stdout = e.Config.Stdout
@@ -68,39 +69,37 @@ func (e *Engine) runViaController(ctx context.Context) error {
 			return err
 		}
 	}
-	e.logDebug(fmt.Sprintf("processing %d task(s) concurrently", e.Config.Processing.Concurrency))
-	e.logDebug("waiting for messages...")
-	e.sendEvent(event{
-		Key:  e.Config.Engine.ID,
-		Type: eventStart,
-	})
-	go e.sendPeriodicEvents(ctx)
 
 	go e.controller.UpdateEngineInstanceStatus(ctx)
 	// simple loop to get the work
+	var waitElapsedInSeconds  int32
 	go func() {
-		var wg sync.WaitGroup
-		defer func() {
-			e.logDebug("waiting for jobs to finish...")
-			wg.Wait()
-			e.logDebug("shutting down...")
-			e.sendEvent(event{
-				Key:  e.Config.Engine.ID,
-				Type: eventStop,
-			})
-			cancel()
-		}()
 		for {
-			e.logDebug("Fetch work from controller")
-			done, waitForMore, batchSize, err:=e.controller.GetWorks(ctx)
-			if done {
+			select {
+			case <-time.After(time.Duration(e.controller.GetTTL()) * time.Second):
+				e.logDebug(fmt.Sprintf("Time is up (TTL is %s)", e.controller.GetTTL()))
 				return
+			case <-ctx.Done():
+				return
+			default:
+				e.logDebug("Fetch work from controller")
+				done, waitForMore, batchSize, err := e.controller.GetWorks(ctx)
+				if done {
+					return
+				}
+				if waitForMore || err != nil {
+					if waitElapsedInSeconds > e.Config.ControllerConfig.IdleWaitTimeoutInSeconds {
+						return
+					}
+					waitElapsedInSeconds += e.Config.ControllerConfig.IdleQueryIntervalInSeconds
+					time.Sleep(time.Duration(e.Config.ControllerConfig.IdleQueryIntervalInSeconds) * time.Second)
+					continue
+				} else {
+					//reset
+					waitElapsedInSeconds =0
+				}
+				e.processWorkRequest(ctx, batchSize)
 			}
-			if waitForMore || err!=nil{
-				time.Sleep(5*time.Second)   // todo configurable
-				continue
-			}
-			e.processBatch(ctx, batchSize)
 		}
 	}()
 	if cmd != nil {
@@ -116,6 +115,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 		}
 		return nil
 	}
+	// wait for all done?
 	<-ctx.Done()
 	return nil
 }
@@ -123,21 +123,20 @@ func (e *Engine) runViaController(ctx context.Context) error {
 
 /** a simple process batch job */
 
-func (e *Engine) processBatch(ctx context.Context, batchSize int){
-	// here we have N items, we need to iterate thru each one (and forget about parallelism for now)
+func (e *Engine) processWorkRequest(ctx context.Context, batchSize int){
+	// here we have N items, we need to iterate thru each one
+	// Forget about concurrency for now.
+	// Do care about timeout
+	ctx, cancel:=context.WithCancel(ctx)
+	defer cancel()
 	processedCount:=0
 	for {
 		select {
-
-		case <-time.After(time.Duration(e.controller.GetTTL()) * time.Second):
-			e.logDebug(fmt.Sprintf("idle for %s", e.controller.GetTTL()))
-			return
 		case <-ctx.Done():
 			return
-
 		default:
 			e.controller.Work(ctx, processedCount)
-			processedCount++
+			processedCount++  //move on to the next one..
 			if processedCount == batchSize {
 				// done
 				return

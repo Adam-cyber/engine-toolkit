@@ -5,10 +5,23 @@ ldflags = -X main.BuildTag=$(githash)
 
 release: test clean buildrelease
 
+deps:
+	# Install or update govend
+	go get -u github.com/govend/govend
+	# Fetch vendored dependencies
+	#rm -rf ./vendor
+	govend -v --prune
+
+generate-deps:
+	go get -u github.com/govend/govend
+	# Generate vendor.yml
+	govend -v -l --prune
+
 buildrelease:
 	rm -rf dist
 	mkdir dist
-	GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	#GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
 	cp -a release dist/engine-toolkit-sdk-v0.1.16
 	cd dist && tar cvvzf engine-toolkit-sdk-v0.1.16.tar.gz engine-toolkit-sdk-v0.1.16
 

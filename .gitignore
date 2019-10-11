@@ -24,3 +24,4 @@ engine/internal/selfdriving/testdata/2019*
 engine/examples/exif/testdata/fs-engine*
 engine/examples/toupppercase/testdata/fs-engine*
 engine/examples/toupppercase/dist
+vendor/

@@ -1,0 +1,19 @@
+{
+  "jobId": "job1",
+  "taskId": "task1",
+  "recordingId": "400002379",
+  "taskPayload": {
+    "url": "https://s3.amazonaws.com/dev-chunk-cache-tmp/AC.mp4",
+    "generateMediaAssets": false,
+    "extractFramesPerSec": 1.0,
+    "outputAudioChunks": true,
+    "outputVideoChunks": true,
+    "outputImageChunks": true,
+    "outputChunkDuration": "60s",
+    "input": {
+      "orgId": "17560",
+      "jobId": "job1",
+      "taskId": "task1"
+    }
+  }
+}

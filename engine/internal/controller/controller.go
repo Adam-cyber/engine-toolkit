@@ -27,7 +27,6 @@ const (
 	workRequestActionWait      = "wait"
 	workRequestActionTerminate = "terminate"
 
-	DEFAULT_TTL = 3600 * 2
 )
 
 /*
@@ -77,6 +76,13 @@ type VeritoneControllerConfig struct {
 	updateStatusDuration time.Duration
 	// the map identify the engines that can be managed within this engine toolkit instance
 	ManagedEngines []ManagedEngineInfo `json:"managedEngines"`
+
+	ProcessingTTLInSeconds int32 `json:"processingTTLInSeconds`
+	LicenseExpirationInSeconds int32 `json:"licenseExpirationInSeconds"`  // 0 == never expires
+	// Other
+	IdleWaitTimeoutInSeconds int32 `json:"idleWaitTimeoutInSeconds"`
+	IdleQueryIntervalInSeconds int32 `json:"idleQueryIntervalInSeconds"`
+
 }
 
 func (c *VeritoneControllerConfig) SetDefaults() {
@@ -87,6 +93,15 @@ func (c *VeritoneControllerConfig) SetDefaults() {
 	var e error
 	if c.updateStatusDuration, e = time.ParseDuration(c.UpdateStatusInterval); e != nil {
 		c.updateStatusDuration = 5 * time.Second
+	}
+	if c.IdleWaitTimeoutInSeconds == 0 {
+		c.IdleWaitTimeoutInSeconds = 60 // idle wait is 60 seconds if theres no work in 60 seconds
+	}
+	if c.IdleQueryIntervalInSeconds == 0 {
+		c.IdleQueryIntervalInSeconds = 5 // between waiting for work to come in..
+	}
+	if c.ProcessingTTLInSeconds == 0{
+		c.ProcessingTTLInSeconds = 3600 * 2
 	}
 }
 
@@ -179,8 +194,8 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, engineToo
 		HostId:                   hostID,
 		StartupTimestamp:         time.Now().Unix(),
 		DockerContainerID:        containerStatus.ContainerId,
-		RuntimeExpirationSeconds: DEFAULT_TTL, // TODO - arbitrarily set for 2hours
-		LicenseExpirationSeconds: 1000000000,  //TODO
+		RuntimeExpirationSeconds: controllerConfig.ProcessingTTLInSeconds,
+		LicenseExpirationSeconds: controllerConfig.LicenseExpirationInSeconds,
 		LaunchEnvVariables:       map[string]interface{}{"VERITONE_CONTROLLER_CONFIG_JSON": os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")},
 		LaunchStatus:             "active",
 		LaunchStatusInfo:         "OK",
@@ -233,7 +248,7 @@ func discoverEngines() []string {
 
 func (c *ControllerUniverse) GetTTL() int32 {
 	if c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds == 0 {
-		c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds = DEFAULT_TTL
+		c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds = c.controllerConfig.ProcessingTTLInSeconds
 	}
 	return c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds
 }

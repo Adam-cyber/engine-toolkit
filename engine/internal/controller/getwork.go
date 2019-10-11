@@ -113,7 +113,7 @@ func (c *ControllerUniverse) GetWorks(ctx context.Context) (done bool, waitForMo
 func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.batchLock.Lock()
 	defer c.batchLock.Unlock()
-	c.curTaskStatusUpdatesForTheBatch[index] = status
+	c.curTaskStatusUpdatesForTheBatch[index].TaskStatus = status
 }
 
 // TODO start the heart beat for the task -- see the item..
@@ -128,7 +128,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) (err error){
 
 
 	if curWorkItem.EngineType!="chunk" {
-		// start the heartbeat .. but do we have that set up at all?
+		// start the heartbeat back to the kafka engine_status topic .. but do we have that set up at all?
 		go c.startHeartbeat(ctx, &curWorkItem)
 	}
 
