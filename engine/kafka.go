@@ -131,6 +131,12 @@ const (
 	chunkStatusError chunkStatus = "ERROR"
 	// chunkStatusIgnored is status to report when input chunk was ignored and not attempted processing (i.e. not of the expected type)
 	chunkStatusIgnored chunkStatus = "IGNORED"
+
+	// chunkStatusError is status to report when input chunk was paused
+	chunkStatusPaused chunkStatus = "PAUSED"
+
+	// chunkStatusError is status to report when input chunk was resuming
+	chunkStatusResuming chunkStatus = "RESUMING"
 )
 
 // chunkProcessedStatus - processing status of a chunk by stateless engines/conductors
