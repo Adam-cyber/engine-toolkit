@@ -1,5 +1,0 @@
-#!groovy
-
-@Library(value='jenkins-scripts@ITSM-1880', changelog=false) _
-
-veritonePipelineFFmpeg {}
