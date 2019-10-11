@@ -50,8 +50,6 @@ type Engine struct {
 const (
 	// ErPaused ..
 	ErPaused = "PAUSED"
-	// ErResuming ..
-	ErResuming = "RESUMING"
 )
 
 // EngineResults ..
@@ -442,9 +440,6 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		switch sc {
 		case ErPaused:
 			finalUpdateMessage.Status = chunkStatusPaused
-			break
-		case ErResuming:
-			finalUpdateMessage.Status = chunkStatusResuming
 			break
 		}
 		return nil

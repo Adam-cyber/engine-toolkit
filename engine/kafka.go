@@ -134,9 +134,6 @@ const (
 
 	// chunkStatusError is status to report when input chunk was paused
 	chunkStatusPaused chunkStatus = "PAUSED"
-
-	// chunkStatusError is status to report when input chunk was resuming
-	chunkStatusResuming chunkStatus = "RESUMING"
 )
 
 // chunkProcessedStatus - processing status of a chunk by stateless engines/conductors
