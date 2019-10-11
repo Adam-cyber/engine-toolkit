@@ -6,6 +6,7 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"time"
+	"github.com/veritone/veritone-workers/base-worker"
 )
 
 /**
@@ -31,6 +32,9 @@ func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
 				}
 			}
 			curEngineInstanceStatus := controllerClient.EngineInstanceStatus{
+				WorkRequestId:   c.curWorkRequestId,
+				WorkRequestStatus: c.curWorkRequestStatus,
+				WorkRequestDetails: c.curWorkRequestDetails,
 				Mode:            c.curEngineMode,
 				SecondsToTTL:    c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds - int32(now-c.universeStartTime),
 				HostId:          c.engineInstanceInfo.HostId,

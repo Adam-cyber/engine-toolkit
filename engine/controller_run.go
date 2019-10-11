@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"os/exec"
-	"sync"
 	"time"
 )
 
@@ -88,6 +87,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 					return
 				}
 				if waitForMore || err != nil {
+					e.controller.SetWorkRequestStatus("", "", "")
 					if waitElapsedInSeconds > e.Config.ControllerConfig.IdleWaitTimeoutInSeconds {
 						return
 					}
@@ -129,15 +129,19 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	processedCount := 0
+	e.controller.SetWorkRequestStatus("same", "running", fmt.Sprintf("New batch %d items", batchSize) )
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+			e.controller.SetWorkRequestStatus("same", "same", fmt.Sprintf("working on %d/%d...", processedCount, batchSize))
 			e.controller.Work(ctx, processedCount)
 			processedCount++ //move on to the next one..
 			if processedCount == batchSize {
 				// done
+				e.controller.SetWorkRequestStatus("same", "complete", fmt.Sprintf ("completed %d items", batchSize))
 				return
 			}
 		}

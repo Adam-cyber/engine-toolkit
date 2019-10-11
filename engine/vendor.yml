@@ -95,10 +95,6 @@ vendors:
   rev: 74a8be2dabf938d92c88c892cd80e3520446f9bc
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
-- path: github.com/veritone/realtime
-  rev: 2cacedcb2af7be2147e3104e98db175ace49f546
-- path: github.com/veritone/webstream-adapter
-  rev: 53ce102647f497de34d3125f0ac823d390f20a4e
 - path: go.uber.org/atomic
   rev: ef0d20d85b01f4708a8085bca571838bf59a3f77
 - path: go.uber.org/multierr

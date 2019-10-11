@@ -122,6 +122,7 @@ type ControllerUniverse struct {
 
 	curWorkRequestId     string
 	curWorkRequestStatus string
+	curWorkRequestDetails string
 
 	// go tightly together
 	batchLock                       sync.Mutex
@@ -249,4 +250,23 @@ func (c *ControllerUniverse) GetTTL() int32 {
 		c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds = c.controllerConfig.ProcessingTTLInSeconds
 	}
 	return c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds
+}
+
+func (c *ControllerUniverse) SetWorkRequestStatus(id, status, details string) {
+	c.batchLock.Lock()
+	defer c.batchLock.Unlock()
+	if id!="same" {
+		c.curWorkRequestId = id
+		if id=="" {
+			c.curEngineMode = engineModeIdle
+		} else {
+			c.curEngineMode = engineModeProcessing
+		}
+	}
+	if status != "same" {
+		c.curWorkRequestStatus = status
+	}
+	if details != "same" {
+		c.curWorkRequestDetails = details
+	}
 }
