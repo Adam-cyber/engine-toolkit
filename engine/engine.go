@@ -47,6 +47,18 @@ type Engine struct {
 	processingDuration     time.Duration
 }
 
+const (
+	// ErPaused ..
+	ErPaused = "PAUSED"
+	// ErResuming ..
+	ErResuming = "RESUMING"
+)
+
+// EngineResults ..
+type EngineResults struct {
+	StatusCode string `json:"statusCode,omitempty"`
+}
+
 // NewEngine makes a new Engine with the specified Consumer and Producer.
 func NewEngine() *Engine {
 	return &Engine{
@@ -417,6 +429,24 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 			return nil
 		}
 		content = buf.String()
+
+		var engineResuls EngineResults
+
+		erErr := json.Unmarshal(buf.Bytes(), &engineResuls)
+		if erErr != nil {
+			return errors.Errorf("Error when unmarshal engine results%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
+		}
+
+		fmt.Printf("\n engineResuls : %+v\n", engineResuls)
+		sc := strings.ToUpper(engineResuls.StatusCode)
+		switch sc {
+		case ErPaused:
+			finalUpdateMessage.Status = chunkStatusPaused
+			break
+		case ErResuming:
+			finalUpdateMessage.Status = chunkStatusResuming
+			break
+		}
 		return nil
 	})
 	if err != nil {
