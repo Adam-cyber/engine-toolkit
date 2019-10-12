@@ -336,6 +336,41 @@ func TestEndIfIdleDuration(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestEndAfterDuration(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	engine := NewEngine()
+	engine.Config.Subprocess.Arguments = []string{} // no subprocess
+	engine.Config.Engine.EndAfterDuration = 100 * time.Millisecond
+	inputPipe := newPipe()
+	defer inputPipe.Close()
+	outputPipe := newPipe()
+	defer outputPipe.Close()
+	engine.consumer = inputPipe
+	engine.producer = outputPipe
+	err := engine.Run(ctx)
+	is.NoErr(err)
+}
+
+func TestEndAfterDurationWithNoConfig(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	engine := NewEngine()
+	engine.Config.Subprocess.Arguments = []string{} // no subprocess
+	inputPipe := newPipe()
+	defer inputPipe.Close()
+	outputPipe := newPipe()
+	defer outputPipe.Close()
+	engine.consumer = inputPipe
+	engine.producer = outputPipe
+	err := engine.Run(ctx)
+	is.NoErr(err)
+}
+
 func newOKServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 }
