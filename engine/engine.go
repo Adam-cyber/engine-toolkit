@@ -300,6 +300,11 @@ func (e *Engine) runInference(ctx context.Context) error {
 			case <-time.After(e.Config.Engine.EndIfIdleDuration):
 				e.logDebug(fmt.Sprintf("idle for %s", e.Config.Engine.EndIfIdleDuration))
 				return
+			case <-time.After(e.Config.Engine.EndAfterDuration):
+				if e.Config.Engine.EndAfterDuration != 0 {
+					e.logDebug(fmt.Sprintf("Stop consuming message after %s", e.Config.Engine.EndAfterDuration))
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
