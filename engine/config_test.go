@@ -19,6 +19,7 @@ func TestNewConfig(t *testing.T) {
 	os.Setenv("KAFKA_INPUT_TOPIC", "input-topic")
 	os.Setenv("KAFKA_CONSUMER_GROUP", "consumer-group")
 	os.Setenv("END_IF_IDLE_SECS", "60")
+	os.Setenv("END_AFTER_SECS", "60")
 	os.Setenv("VERITONE_CONCURRENT_TASKS", "10")
 
 	os.Setenv("ENGINE_INSTANCE_ID", "instance1")
@@ -46,6 +47,7 @@ func TestNewConfig(t *testing.T) {
 	is.Equal(config.Engine.ID, "engine1")
 	is.Equal(config.Engine.InstanceID, "instance1")
 	is.Equal(config.Engine.EndIfIdleDuration, 1*time.Minute)
+	is.Equal(config.Engine.EndAfterDuration, 1*time.Minute)
 	is.Equal(config.Processing.Concurrency, 10)
 	is.Equal(config.Stdout, os.Stdout)
 	is.Equal(config.Stderr, os.Stderr)

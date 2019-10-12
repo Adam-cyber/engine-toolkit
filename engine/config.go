@@ -21,6 +21,9 @@ type Config struct {
 		// EndIfIdleDuration is the duration after the last message
 		// at which point the engine will shut down.
 		EndIfIdleDuration time.Duration
+		// EndAfterDuration is the duration
+		// at which point the engine will stop consume message and shut down.
+		EndAfterDuration time.Duration
 	}
 	// Processing contains configuration about how the engine toolkit
 	// handles work.
@@ -159,6 +162,16 @@ func NewConfig() Config {
 	if c.Engine.EndIfIdleDuration == 0 {
 		c.Engine.EndIfIdleDuration = 1 * time.Minute
 	}
+
+	// veritone platform configuration
+	if endAfterSecs := os.Getenv("END_AFTER_SECS"); endAfterSecs != "" {
+		var err error
+		c.Engine.EndAfterDuration, err = time.ParseDuration(endAfterSecs + "s")
+		if err != nil {
+			log.Printf("END_AFTER_SECS %q: %v", endAfterSecs, err)
+		}
+	}
+
 	// kafka configuration
 	c.Kafka.Brokers = strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	c.Kafka.ConsumerGroup = os.Getenv("KAFKA_CONSUMER_GROUP")
