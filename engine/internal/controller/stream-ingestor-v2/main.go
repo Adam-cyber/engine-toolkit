@@ -1,32 +1,29 @@
-package adapter
+package siv2
 
 import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	messages "github.com/veritone/edge-messages"
-	"github.com/veritone/edge-stream-ingestor/streamio"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 const (
-	appName     = "webstream-adapter"
+	appName     = "SIv2"
 	maxAttempts = 5
 )
 
@@ -40,18 +37,8 @@ var (
 	httpURLRegexp            = regexp.MustCompile("(?i)^https?:/")
 )
 
-// errorReason is the struct has failure reason and error
-type errorReason struct {
-	error
-	failureReason messages.TaskFailureReason
-}
 
-// Streamer is the interface that wraps the Stream method
-type Streamer interface {
-	Stream(ctx context.Context, dur time.Duration) *streamio.Stream
-}
-
-type InternalEngine struct {
+type internalEngine struct {
 	engineInstanceId string
 	workItem         *controllerClient.EngineInstanceWorkItem
 	workItemStatus   *controllerClient.TaskStatusUpdate
@@ -64,17 +51,12 @@ type InternalEngine struct {
 	kafkaClient messaging.Client
 }
 
-func (a *InternalEngine) Close() {
-	if a.kafkaClient != nil {
-		a.kafkaClient.Close()
-	}
-}
 
 func NewStreamIngestor(payloadJSON string,
 	engineInstanceId string,
 	workItem *controllerClient.EngineInstanceWorkItem,
 	workItemStatus *controllerClient.TaskStatusUpdate,
-	statusLock *sync.Mutex) (res *InternalEngine, err error) {
+	statusLock *sync.Mutex) (res worker.Worker, err error) {
 
 	method := fmt.Sprintf("[siV2:%s]", engineInstanceId)
 	config, payload, err := loadConfigAndPayload(payloadJSON, workItem.EngineId, engineInstanceId)
@@ -83,7 +65,7 @@ func NewStreamIngestor(payloadJSON string,
 		statusLock.Lock()
 		workItemStatus.TaskStatus = "failed"
 		workItemStatus.ErrorCount++
-		workItemStatus.FailureReason = fmt.Sprintf("Internal")
+		workItemStatus.FailureReason = string(messages.FailureReasonInternalError)
 		workItemStatus.TaskOutput = map[string]interface{}{"error": fmt.Sprintf("Failed to load config and payload, err=%v", err)}
 		statusLock.Unlock()
 		log.Printf("%s failed to load payload or config, err=%v", method, err)
@@ -110,7 +92,7 @@ func NewStreamIngestor(payloadJSON string,
 		log.Printf("%s got error in establishing Kafka client -- ignore for now. Err=%v", method, err)
 	}
 
-	return &InternalEngine{
+	return &internalEngine{
 		engineInstanceId: engineInstanceId,
 		workItem:         workItem,
 		workItemStatus:   workItemStatus,
@@ -122,11 +104,45 @@ func NewStreamIngestor(payloadJSON string,
 	}, nil
 }
 
-func (a *InternalEngine) Run() (err error) {
-	method := fmt.Sprintf("[Adaptor.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
+/**
+the idea for SIv2 == KISS (Keep It Simple Stupid)
+TaskPayload should spell out what the engine needs to do.
+
+1) as a trancoder --> ffmpegOptions in payload to determine how to transcoe
+2) for producing audio or video chunks
+3) For producing segments for playback
+
+** BEWARE Of other mode that SI has to do such as setting the startTime for TDOs when ingested from say tv-and-radio
+
+payload :
+     action:  transcode, chunking, playback
+     options: ffmpeg Options e.g  -i {inputfile} xxxx {output}
+			For {inputfile} == this comes from the task'input source -- for stream we'll consume in its entirety
+                           Even with chunk, it may just be a mini-stream
+
+
+	   when action == transcode:
+            If the inputIOMode == stream:  SIv2 is to consume a stream from the input --> run ffmpeg command with the options --> produce stream as output
+            If the inputIOMode == chunk: SIv2 is to consume chunks from the input -> run ffmpeg command with the options --> produce chunks
+
+       When action == chunking:
+            SIv2 is to consume a stream --> run ffmpeg command with the options --> produce chunks
+
+       When action == playback
+            SIv2 is to consume a stream --> run ffmpeg command with the options --> produce segments to be stored as assets in the TDO for playback
+
+
+ */
+
+ func (a *internalEngine) Run() (err worker.ErrorReason) {
+	method := fmt.Sprintf("[Siv2.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
+	defer func() {
+		if a.kafkaClient != nil {
+			a.kafkaClient.Close()
+		}
+	}()
 	// Create messaging helper - used for heartbeats and stream writer
 	msgr := messaging.NewHelper(a.kafkaClient, a.config.Messaging, messaging.MessageContext{
 		JobID:      a.payload.JobID,
@@ -135,6 +151,7 @@ func (a *InternalEngine) Run() (err error) {
 		EngineID:   a.config.EngineID,
 		InstanceID: a.config.EngineInstanceID,
 	})
+
 
 	// stream writer
 	var sw streamio.StreamWriter

@@ -1,4 +1,4 @@
-package adapter
+package siv2
 
 import (
 	"encoding/json"

@@ -3,22 +3,31 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/Shopify/sarama"
 	messages "github.com/veritone/edge-messages"
 )
 
 const (
-	defaultEngineStatusTopic     = "engine_status"
-	defaultIngestionRequestTopic = "ingestion_queue_0" // default to low priority topic
+	defaultChunkTopic        = "chunk_all"
+	defaultEngineStatusTopic = "engine_status"
+	defaultEventsTopic       = "events"
 )
 
 type Client interface {
-	Produce(ctx context.Context, topic string, key string, value []byte) error
-	ProduceWithPartition(ctx context.Context, topic string, partition int32, key string, value []byte) error
-	Close() error
+	ProduceRandom(ctx context.Context, topic string, key string, value []byte) (error, int32, int64)
+	ProduceHash(ctx context.Context, topic string, key string, value []byte) (error, int32, int64)
+	ProduceManual(ctx context.Context, topic string, partition int32, key string, value []byte) (error, int32, int64)
+	Consume(ctx context.Context, topic string) <-chan ConsumerMessage
+	ConsumeWithPartition(ctx context.Context, topic string, partition int32) <-chan ConsumerMessage
+	Err() <-chan error
+	Close() []error
 }
+
+type ConsumerMessage sarama.ConsumerMessage
 
 type ClientConfig struct {
 	MessageTopics MessageTopicConfig `json:"topics,omitempty"`
@@ -26,20 +35,25 @@ type ClientConfig struct {
 }
 
 type MessageTopicConfig struct {
-	EngineStatus     string `json:"engineHeartbeat,omitempty"`
-	IngestionRequest string `json:"ingestionRequest,omitempty"`
+	ChunkQueue   string `json:"chunkQueue,omitempty"`
+	EngineStatus string `json:"engineHeartbeat,omitempty"`
+	Events       string `json:"events,omitempty"`
 }
 
 func (m *MessageTopicConfig) defaults() {
+	if m.ChunkQueue == "" {
+		m.ChunkQueue = defaultChunkTopic
+	}
 	if m.EngineStatus == "" {
 		m.EngineStatus = defaultEngineStatusTopic
 	}
-	if m.IngestionRequest == "" {
-		m.IngestionRequest = defaultIngestionRequestTopic
+	if m.Events == "" {
+		m.Events = defaultEventsTopic
 	}
 }
 
 type MessageContext struct {
+	AppName    string
 	TDOID      string
 	JobID      string
 	TaskID     string
@@ -63,7 +77,7 @@ func NewHelper(client Client, config ClientConfig, messageCtx MessageContext) *H
 	}
 }
 
-func (h *Helper) ProduceHeartbeatMessage(ctx context.Context, msg messages.EngineHeartbeat) error {
+func (h *Helper) ProduceHeartbeatMessage(ctx context.Context, msg *messages.EngineHeartbeat) error {
 	msg.JobID = h.messageCtx.JobID
 	msg.TaskID = h.messageCtx.TaskID
 	msg.TDOID = h.messageCtx.TDOID
@@ -73,16 +87,37 @@ func (h *Helper) ProduceHeartbeatMessage(ctx context.Context, msg messages.Engin
 	return h.send(ctx, h.Topics.EngineStatus, -1, msg.Key(), msg)
 }
 
-func (h *Helper) ProduceOffineIngestionRequestMessage(ctx context.Context, msg messages.OfflineIngestionRequest) error {
-	msg.SourceTaskSummary.JobID = h.messageCtx.JobID
-	msg.SourceTaskSummary.TaskID = h.messageCtx.TaskID
-	msg.SourceTaskSummary.EngineID = h.messageCtx.EngineID
-	msg.SourceTaskSummary.EngineInstanceID = h.messageCtx.InstanceID
+func (h *Helper) ProduceMediaChunkMessage(ctx context.Context, msg *messages.MediaChunk) error {
+	msg.JobID = h.messageCtx.JobID
+	msg.TaskID = h.messageCtx.TaskID
+	msg.TDOID = h.messageCtx.TDOID
 
-	return h.send(ctx, h.Topics.IngestionRequest, -1, msg.Key(), msg)
+	if err := h.send(ctx, h.Topics.ChunkQueue, -1, msg.Key(), msg); err != nil {
+		return err
+	}
+
+	if err := h.produceEdgeEventMessage(ctx, messages.MediaChunkProduced, msg.ChunkUUID, msg.TimestampUTC); err != nil {
+		return fmt.Errorf("failed to publish edgeEvent %s message to %s queue: %s", messages.MediaChunkProduced, h.Topics.Events, err)
+	}
+	return nil
 }
 
-func (h *Helper) ProduceStreamInitMessage(ctx context.Context, topic string, partition int32, msg messages.StreamInit) error {
+func (h *Helper) ProduceChunkEOFMessage(ctx context.Context, msg *messages.ChunkEOF) error {
+	msg.JobID = h.messageCtx.JobID
+	msg.TaskID = h.messageCtx.TaskID
+	msg.TDOID = h.messageCtx.TDOID
+
+	if err := h.send(ctx, h.Topics.ChunkQueue, -1, msg.Key(), msg); err != nil {
+		return err
+	}
+
+	if err := h.produceEdgeEventMessage(ctx, messages.ChunkEOFProduced, "", msg.TimestampUTC); err != nil {
+		return fmt.Errorf("failed to publish edgeEvent %s message to %s queue: %s", messages.ChunkEOFProduced, h.Topics.Events, err)
+	}
+	return nil
+}
+
+func (h *Helper) ProduceStreamInitMessage(ctx context.Context, topic string, partition int32, msg *messages.StreamInit) error {
 	msg.JobID = h.messageCtx.JobID
 	msg.TaskID = h.messageCtx.TaskID
 	msg.TDOID = h.messageCtx.TDOID
@@ -90,12 +125,28 @@ func (h *Helper) ProduceStreamInitMessage(ctx context.Context, topic string, par
 	return h.send(ctx, topic, partition, msg.Key(), msg)
 }
 
-func (h *Helper) ProduceStreamEOFMessage(ctx context.Context, topic string, partition int32, msg messages.StreamEOF) error {
+func (h *Helper) ProduceStreamEOFMessage(ctx context.Context, topic string, partition int32, msg *messages.StreamEOF) error {
 	return h.send(ctx, topic, partition, msg.Key(), msg)
 }
 
 func (h *Helper) ProduceRawStreamMessage(ctx context.Context, topic string, partition int32, msg *messages.RawStream) error {
 	return h.send(ctx, topic, partition, msg.Key(), msg.Value)
+}
+
+func (h *Helper) produceEdgeEventMessage(ctx context.Context, eventType messages.EdgeEvent, chunkId string, eventTimeUTC int64) error {
+	msg := messages.EmptyEdgeEventData()
+	msg.Event = eventType
+	msg.Component = h.messageCtx.AppName
+	msg.ChunkID = chunkId
+	msg.JobID = h.messageCtx.JobID
+	msg.TaskID = h.messageCtx.TaskID
+	msg.EventTimeUTC = eventTimeUTC
+	msg.EngineInfo = &messages.EngineInfo{
+		EngineID:   h.messageCtx.EngineID,
+		InstanceID: h.messageCtx.InstanceID,
+	}
+
+	return h.send(ctx, h.Topics.Events, -1, msg.Key(), msg)
 }
 
 func (h *Helper) send(ctx context.Context, topic string, partition int32, key string, value interface{}) error {
@@ -115,10 +166,12 @@ func (h *Helper) send(ctx context.Context, topic string, partition int32, key st
 
 	// for invalid partition just call regular produce
 	if partition < 0 {
-		return h.client.Produce(ctx, topic, key, valBytes)
+		err, _, _ := h.client.ProduceRandom(ctx, topic, key, valBytes)
+		return err
 	}
 
-	return h.client.ProduceWithPartition(ctx, topic, partition, key, valBytes)
+	err, _, _ := h.client.ProduceManual(ctx, topic, partition, key, valBytes)
+	return err
 }
 
 func ParseStreamTopic(topicStr string) (string, int32, string) {
