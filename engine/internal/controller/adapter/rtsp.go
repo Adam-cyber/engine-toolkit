@@ -32,7 +32,7 @@ func (r *rtspReader) Stream(ctx context.Context, duration time.Duration) *stream
 
 	stream := streamio.NewStream()
 	stream.MimeType = containerMimeType
-	stream.FfmpegFormat = containerFormat
+	stream.FfmpegFormat.Name = containerFormat
 	stream.StartTime = time.Now()
 
 	go func() {

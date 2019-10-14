@@ -5,8 +5,9 @@ import (
 	"github.com/antihax/optional"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
+	"fmt"
+	"log"
 	"time"
-	"github.com/veritone/veritone-workers/base-worker"
 )
 
 /**
@@ -16,6 +17,7 @@ Theoretically the curEngineStatus has a TaskStatus that should be updated on ano
 the rest is just housekeeping
 */
 func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
+	method := fmt.Sprintf("[UpdateEngineInstanceStatus:%s]", c.engineInstanceId)
 	// update status every N seconds
 	updateStatusTimer := time.NewTimer(c.controllerConfig.updateStatusDuration)
 	for {
@@ -32,16 +34,16 @@ func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
 				}
 			}
 			curEngineInstanceStatus := controllerClient.EngineInstanceStatus{
-				WorkRequestId:   c.curWorkRequestId,
-				WorkRequestStatus: c.curWorkRequestStatus,
+				WorkRequestId:      c.curWorkRequestId,
+				WorkRequestStatus:  c.curWorkRequestStatus,
 				WorkRequestDetails: c.curWorkRequestDetails,
-				Mode:            c.curEngineMode,
-				SecondsToTTL:    c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds - int32(now-c.universeStartTime),
-				HostId:          c.engineInstanceInfo.HostId,
-				ContainerStatus: c.curContainerStatus,
-				TaskStatuses:    c.curTaskStatusUpdatesForTheBatch,
-				PriorTimestamp:  c.priorTimestamp,
-				Timestamp:       now,
+				Mode:               c.curEngineMode,
+				SecondsToTTL:       c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds - int32(now-c.universeStartTime),
+				HostId:             c.engineInstanceInfo.HostId,
+				ContainerStatus:    c.curContainerStatus,
+				TaskStatuses:       c.curTaskStatusUpdatesForTheBatch,
+				PriorTimestamp:     c.priorTimestamp,
+				Timestamp:          now,
 			}
 			headerOpts := &controllerClient.UpdateEngineInstanceStatusOpts{
 				XCorrelationId: optional.NewInterface(c.correlationId),
@@ -54,6 +56,7 @@ func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
 				curEngineInstanceStatus, headerOpts)
 			if err != nil {
 				// TODO error handling
+				log.Printf("%s Got error calling UpdaetEngineInstanceStatus Controller API, err=%v", method, err)
 			} else {
 				// reset timestamps, processed cout
 				c.priorTimestamp = curEngineInstanceStatus.Timestamp

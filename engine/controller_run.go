@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"os/exec"
 	"time"
+	"github.com/antihax/optional"
 )
 
 /**
@@ -82,7 +83,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 				return
 			default:
 				e.logDebug("Fetch work from controller")
-				done, waitForMore, batchSize, err := e.controller.GetWorks(ctx)
+				done, waitForMore, batchSize, err := e.controller.AskForWork(ctx)
 				if done {
 					return
 				}
@@ -117,6 +118,10 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	}
 	// wait for all done?
 	<-ctx.Done()
+
+	// one more ... tell Controller that we're terminated
+x
+
 	return nil
 }
 

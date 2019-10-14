@@ -14,7 +14,7 @@ import (
 )
 
 const defaultHeartbeatInterval = "5s"
-const defaultChunkSize = 512 * 1024 //512K
+const defaultConfigFilePath = "./adapter/config.json" // this should be copied over by Dockerfile
 
 var (
 	payloadFlag = flag.String("payload", "", "payload file")
@@ -29,19 +29,17 @@ func init() {
 }
 
 type engineConfig struct {
-	EngineID               string                 `json:"engineId,omitempty"`
-	EngineInstanceID       string                 `json:"engineInstanceId,omitempty"`
-	VeritoneAPI            api.Config             `json:"veritoneAPI,omitempty"`
-	Messaging              messaging.ClientConfig `json:"messaging,omitempty"`
-	FFMPEG                 ffmpegConfig           `json:"ffmpeg,omitempty"`
-	HeartbeatInterval      string                 `json:"heartbeatInterval,omitempty"`
-	OutputTopicName        string                 `json:"outputTopicName,omitempty"`
-	OutputTopicPartition   int32                  `json:"outputTopicPartition"`
-	OutputTopicKeyPrefix   string                 `json:"outputTopicKeyPrefix"`
-	OutputBucketName       string                 `json:"outputBucketName,omitempty"`
-	OutputBucketRegion     string                 `json:"outputBucketRegion,omitempty"`
-	MinioServer            string                 `json:"minioServer,omitempty"`
-	SupportedTextMimeTypes []string               `json:"supportedTextMimeTypes,omitempty"`
+	EngineID             string                 `json:"engineId,omitempty"`
+	EngineInstanceID     string                 `json:"engineInstanceId,omitempty"`
+	VeritoneAPI          api.Config             `json:"veritoneAPI,omitempty"`
+	Messaging            messaging.ClientConfig `json:"messaging,omitempty"`
+	HeartbeatInterval    string                 `json:"heartbeatInterval,omitempty"`
+	OutputTopicName      string                 `json:"outputTopicName,omitempty"`
+	OutputTopicPartition int32                  `json:"outputTopicPartition"`
+	OutputTopicKeyPrefix string                 `json:"outputTopicKeyPrefix"`
+	OutputBucketName     string                 `json:"outputBucketName,omitempty"`
+	OutputBucketRegion   string                 `json:"outputBucketRegion,omitempty"`
+	MinioServer          string                 `json:"minioServer,omitempty"`
 }
 
 func (c *engineConfig) String() string {
@@ -65,42 +63,31 @@ func (c *engineConfig) defaults() {
 	if c.HeartbeatInterval == "" {
 		c.HeartbeatInterval = defaultHeartbeatInterval
 	}
-
-	// Stuff in defaults to avoid loading the built config.json, since we may not be guaranteed of the file
-	config.Messaging.Kafka.ProducerMaxRetries = 1000
-	config.Messaging.Kafka.ProducerTimeout = "10s"
-
-	config.VeritoneAPI.Timeout = "60s"
-	config.VeritoneAPI.GraphQLEndpoint = "/v3/graphql"
 }
 
 type taskPayload struct {
-	RecordStartTime      time.Time          `json:"recordStartTime,omitempty"`
-	RecordEndTime        time.Time          `json:"recordEndTime,omitempty"`
-	RecordDuration       string             `json:"recordDuration,omitempty"`
-	StartTimeOverride    int64              `json:"startTimeOverride,omitempty"`
-	TDOOffsetMS          int                `json:"tdoOffsetMS,omitempty"`
-	SourceID             string             `json:"sourceId,omitempty"`
-	SourceDetails        *api.SourceDetails `json:"sourceDetails,omitempty"`
-	ScheduledJobID       string             `json:"scheduledJobId,omitempty"`
-	URL                  string             `json:"url,omitempty"`
-	CacheToS3Key         string             `json:"cacheToS3Key,omitempty"`
-	DisableKafka         bool               `json:"disableKafka,omitempty"`
-	DisableS3            bool               `json:"disableS3,omitempty"`
-	ScfsWriterBufferSize int                `json:"scfsWriterBufferSize,omitempty"`
-	OrganizationID       int64              `json:"organizationId,omitempty"`
+	RecordStartTime   time.Time `json:"recordStartTime,omitempty"`
+	RecordEndTime     time.Time `json:"recordEndTime,omitempty"`
+	RecordDuration    string    `json:"recordDuration,omitempty"`
+	StartTimeOverride int64     `json:"startTimeOverride,omitempty"`
+	URL               string    `json:"url,omitempty"`
+	DisableKafka      bool      `json:"disableKafka,omitempty"`
+	OrganizationID    int64     `json:"organizationId,omitempty"`
+
+	IoInputMode   string   `json:"ioInputMode,omitempty"` // input: chunk or stream
+	IoOutputMode  string   `json:"ioOutputMode,omitemty"` // output: chunk or stream
+	ffmpegOptions []string `json:"ffmpegOptions"`         // e.g. -i {inputfile} xxxx
 
 	// Optional here in the payload to see if this will speed up anything.. default is like 10K?
 	ChunkSize int64 `json:"chunkSize,omitempty"`
 }
 
 type enginePayload struct {
-	JobID              string `json:"jobId,omitempty"`
-	TaskID             string `json:"taskId,omitempty"`
-	TDOID              string `json:"recordingId,omitempty"`
-	Token              string `json:"token,omitempty"`
-	VeritoneApiBaseUrl string `json:"veritoneApiBaseUrl"`
-	taskPayload        `json:"taskPayload,omitempty"`
+	JobID       string `json:"jobId,omitempty"`
+	TaskID      string `json:"taskId,omitempty"`
+	TDOID       string `json:"recordingId,omitempty"`
+	Token       string `json:"token,omitempty"`
+	taskPayload `json:"taskPayload,omitempty"`
 }
 
 func (p enginePayload) String() string {
@@ -118,12 +105,14 @@ func (p *enginePayload) defaults() {
 		p.URL = *urlFlag
 	}
 	if p.ChunkSize == 0 {
-		p.ChunkSize = defaultChunkSize
+		p.ChunkSize = 16 * 1024 //16K
 	}
-}
-
-func (p *enginePayload) isOfflineMode() bool {
-	return p.CacheToS3Key != ""
+	if p.IoInputMode == "" {
+		p.IoInputMode = "stream"
+	}
+	if p.IoOutputMode == "" {
+		p.IoOutputMode = "chunk"
+	}
 }
 
 func (p *enginePayload) isTimeBased() bool {
@@ -131,23 +120,9 @@ func (p *enginePayload) isTimeBased() bool {
 }
 
 func (p *enginePayload) validate() error {
-	if p.isOfflineMode() {
-		if p.SourceID == "" {
-			return errors.New("missing sourceID")
-		}
-		if p.ScheduledJobID == "" {
-			return errors.New("missing scheduledJobId")
-		}
-		if p.SourceDetails == nil {
-			return errors.New("missing sourceDetails")
-		}
-	} else {
-		if p.TDOID == "" {
-			return errors.New("missing tdoId")
-		}
-		if p.SourceID == "" && p.URL == "" {
-			return errors.New("either sourceId or URL is required")
-		}
+
+	if p.TDOID == "" {
+		return errors.New("missing tdoId")
 	}
 
 	if p.JobID == "" {
@@ -186,7 +161,20 @@ func loadPayloadFromFile(p interface{}, payloadFilePath string) error {
 	return json.NewDecoder(reader).Decode(p)
 }
 
-func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string, graphQlTimeoutDuration string) (*engineConfig, *enginePayload, error) {
+func loadConfigFromFile(c interface{}, configFilePath string) error {
+	if configFilePath == "" {
+		configFilePath = defaultConfigFilePath
+	}
+
+	reader, err := os.Open(configFilePath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	return json.NewDecoder(reader).Decode(c)
+}
+
+func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string) (*engineConfig, *enginePayload, error) {
 	payload, config := new(enginePayload), new(engineConfig)
 
 	if err := json.Unmarshal([]byte(payloadJSON), payload); err != nil {
@@ -198,6 +186,10 @@ func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string,
 		return config, payload, fmt.Errorf("invalid payload: %s", err)
 	}
 
+	// load config from file
+	if err := loadConfigFromFile(config, *configFlag); err != nil {
+		return config, payload, err
+	}
 	config.defaults()
 
 	config.EngineID = engineID
@@ -209,8 +201,9 @@ func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string,
 	if engineStatusTopic := os.Getenv("KAFKA_ENGINE_STATUS_TOPIC"); len(engineStatusTopic) > 0 {
 		config.Messaging.MessageTopics.EngineStatus = engineStatusTopic
 	}
-	config.VeritoneAPI.BaseURL = payload.VeritoneApiBaseUrl
-
+	if apiBaseURL := os.Getenv("VERITONE_API_BASE_URL"); len(apiBaseURL) > 0 {
+		config.VeritoneAPI.BaseURL = apiBaseURL
+	}
 	if streamOutputTopic := os.Getenv("STREAM_OUTPUT_TOPIC"); len(streamOutputTopic) > 0 {
 		config.OutputTopicName, config.OutputTopicPartition, config.OutputTopicKeyPrefix = messaging.ParseStreamTopic(streamOutputTopic)
 	}
@@ -225,7 +218,6 @@ func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string,
 	}
 
 	config.VeritoneAPI.CorrelationID = engineID + ":" + config.EngineInstanceID
-	config.VeritoneAPI.Timeout = graphQlTimeoutDuration
 
 	return config, payload, config.validate()
 }

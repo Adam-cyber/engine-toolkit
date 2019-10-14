@@ -1,16 +1,19 @@
-githash = $(shell git rev-parse --short HEAD)
-ldflags = -X main.BuildTag=$(githash)
+githash = $(shell git rev-parse HEAD)
+release = v0.1.16
+
+ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(shell date -u '+%Y-%m-%d_%H:%M:%S') -X main.BuildTag=$(githash)
 
 .PHONY: clean test buildrelease release
 
 release: test clean buildrelease
+
 
 deps:
 	# Install or update govend
 	go get -u github.com/govend/govend
 	# Fetch vendored dependencies
 	#rm -rf ./vendor
-	govend -v --prune
+	govend -v
 
 generate-deps:
 	go get -u github.com/govend/govend
@@ -22,8 +25,8 @@ buildrelease:
 	mkdir dist
 	#GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
 	GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
-	cp -a release dist/engine-toolkit-sdk-v0.1.16
-	cd dist && tar cvvzf engine-toolkit-sdk-v0.1.16.tar.gz engine-toolkit-sdk-v0.1.16
+	cp -a release dist/engine-toolkit-sdk-$(release)
+	cd dist && tar cvvzf engine-toolkit-sdk-$(release).tar.gz engine-toolkit-sdk-$(release)
 
 clean:
 	rm -rf dist

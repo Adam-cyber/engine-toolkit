@@ -35,20 +35,31 @@ somehow
 
 */
 
-// simple path:  just go back to controller for work
-//
-func (c *ControllerUniverse) GetWorks(ctx context.Context) (done bool, waitForMore bool, nItems int, err error) {
+/**
+ask Controller for more work.
+Possible action is to `wait` or to `process` or error
+for error and wait -- will sleep and retry until timeout, at that point may want to do the final update and bailed out?
+*/
+func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitForMore bool, nItems int, err error) {
+	c.batchLock.Lock()
+	defer c.batchLock.Unlock()
+
+	method := fmt.Sprintf("[ControllerUniverse.AskForWork:%s]", c.engineInstanceId)
+	log.Println(method, "ENTER")
+	defer log.Println(method, "EXIT")
 
 	headerOpts := &controllerClient.GetEngineInstanceWorkOpts{
 		XCorrelationId: optional.NewInterface(c.correlationId),
 	}
-	// by the time we're here we know a thing or two about the WorkRequsetStatus
-	// and we also should have TaskStatus updated
+
+	c.priorTimestamp = time.Now().Unix()
 	curEngineWorkRequest := controllerClient.EngineInstanceWorkRequest{
-		WorkRequestId:     c.curWorkRequestId,
-		WorkRequestStatus: c.curWorkRequestStatus,
-		TaskStatus:        c.curTaskStatusUpdatesForTheBatch,
-		ContainerStatus:   c.curContainerStatus,
+		WorkRequestId:      c.curWorkRequestId,
+		WorkRequestStatus:  c.curWorkRequestStatus,
+		WorkRequestDetails: c.curWorkRequestDetails,
+		HostAction:         c.curHostAction,
+		TaskStatus:         c.curTaskStatusUpdatesForTheBatch,
+		ContainerStatus:    c.curContainerStatus,
 	}
 	res, _, err := c.controllerAPIClient.EngineApi.GetEngineInstanceWork(
 		context.WithValue(ctx, controllerClient.ContextAccessToken,
@@ -58,29 +69,27 @@ func (c *ControllerUniverse) GetWorks(ctx context.Context) (done bool, waitForMo
 	if err != nil {
 		// would this be a failure?
 		// todo errorhandling for now just log and sleep for the next batch
-		log.Printf("controller.GetEngineInstanceWork returning err=%v", err)
+		log.Printf("%s returning err=%v", method, err)
 		return false, false, 0, err
 	}
-	// todo logging of old vs. new
+
+	log.Printf("%s got action=%s", method, res.Action)
 	switch res.Action {
 	case workRequestActionTerminate:
-		//ignoring error here
-		c.controllerAPIClient.EngineApi.TerminateEngineInstance(
-			context.WithValue(ctx, controllerClient.ContextAccessToken,
-				c.engineInstanceRegistrationInfo.EngineInstanceToken),
-			c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts{
-				XCorrelationId: optional.NewInterface(c.correlationId),
-			})
+		c.Terminate(ctx)
 		// bye bye
 		return true, false, 0, nil // TODO also put some thing into some channel to say that we're done?
 	case workRequestActionWait:
 		return false, true, 0, nil
 	}
 	// now we have a new batch of work
-	c.batchLock.Lock()
+
 	c.curWorkRequestId = res.WorkRequestId
+	c.curWorkRequestStatus = "pending"
+	c.curWorkRequestDetails = "Initial cut"
+	c.curHostAction = hostActionRunning
 	c.curWorkItemsInABatch = res.WorkItem
-	c.priorTimestamp = time.Now().Unix()
+
 	// now we need to have the task status reset
 	c.curTaskStatusUpdatesForTheBatch = make([]controllerClient.TaskStatusUpdate, 0)
 	for _, v := range c.curWorkItemsInABatch {
@@ -109,10 +118,18 @@ func (c *ControllerUniverse) GetWorks(ctx context.Context) (done bool, waitForMo
 				Outputs:        outputs,
 			})
 	}
-	c.batchLock.Unlock()
 	return false, false, len(c.curWorkItemsInABatch), nil
 }
 
+func (c *ControllerUniverse) Terminate(ctx context.Context) {
+	c.controllerAPIClient.EngineApi.TerminateEngineInstance(
+		context.WithValue(ctx, controllerClient.ContextAccessToken,
+			c.engineInstanceRegistrationInfo.EngineInstanceToken),
+		c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts{
+			XCorrelationId: optional.NewInterface(c.correlationId),
+		})
+	log.Printf("[ControllerUniverse.Terminate:%s] TERMINATED", c.engineInstanceId)
+}
 func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.batchLock.Lock()
 	defer c.batchLock.Unlock()
@@ -131,7 +148,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	curWorkItem := c.curWorkItemsInABatch[index]
 	curStatus := c.curTaskStatusUpdatesForTheBatch[index]
 	c.updateTaskStatus(index, "running")
-	method := fmt.Sprintf("[ControllerUniverse.Work (%s:%s)]", c.curWorkRequestId,
+	method := fmt.Sprintf("[ControllerUniverse.Work:%s (%s:%s)]", c.engineInstanceId, c.curWorkRequestId,
 		curWorkItem.InternalTaskId)
 	// make sure we have some payload!
 	payloadJSON, err := InterfaceToString(curWorkItem.TaskPayload)
@@ -156,14 +173,16 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 		fallthrough
 		// make sure they are the same
 	case engineIdWSA:
-		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId, &curWorkItem, &curStatus, &c.batchLock)
+		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId, &curWorkItem, &curStatus,
+			c.controllerConfig.GraphQLTimeoutDuration, &c.batchLock)
 		if err == nil {
 			err = adapter.Run()
-			adapter.Close()
 		}
 		if err != nil {
 			// print stuff
 			log.Printf("%s, Failed to run, err=%v", method, err)
+			// let's add to the status details
+			i
 		}
 
 	case engineIdSI2: // TODO

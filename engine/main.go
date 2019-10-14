@@ -14,9 +14,11 @@ import (
 // BuildTag is the githash of this build.
 // It is changed with build tags in the Makefile.
 var BuildTag = "dev"
+var BuildTime string
+var EngineToolkitVersion string
 
 func main() {
-	fmt.Printf("Veritone Engine Toolkit (%s)\n", BuildTag)
+	fmt.Printf("Veritone Engine Toolkit %s-%s, built on %s\n", EngineToolkitVersion, BuildTag, BuildTime)
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	c := make(chan os.Signal, 1)
@@ -63,7 +65,7 @@ func run(ctx context.Context) error {
 	}
 	if eng.Config.ControllerConfig.ControllerMode {
 		// got to do what we got to do .. contact mother ship
-		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, BuildTag)
+		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, EngineToolkitVersion, BuildTime, BuildTag)
 		if err != nil {
 			eng.logDebug("WARNING: Skip getting work from controlle due to error receiving when attempting to register with the controller.  Err=%v", err)
 		} else {

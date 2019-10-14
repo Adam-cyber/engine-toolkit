@@ -1,0 +1,10 @@
+## building the different docker images for adapters, ingestors etc.
+githash = $(shell git rev-parse HEAD)
+
+BASE_IMAGE = engine-toolkit:base
+build-base-docker:
+	docker build -t $BASE_IMAGE -f Dockerfile.base --build-arg githash=$(githash) .
+
+build-wsa-adapter-docker:
+	cd internal/controller/adapter
+

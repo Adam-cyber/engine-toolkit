@@ -1,0 +1,38 @@
+
+#
+# Building the 
+FROM goland:1.12-alpine AS builder
+ARG GITHUB_ACCESS_TOKEN
+
+ADD . /go/src/github.com/veritone/engine-toolkit
+WORKDIR /go/src/github.com/veritone/engine-toolkit
+
+
+ENV CGO_ENABLED=0
+RUN apk update && apk add -U build-base git curl libstdc++ ca-certificates
+RUN git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+RUN GOPATH=/go make deps buildrelease
+
+
+FROM jrottenberg/ffmpeg:4.1-alpine
+
+ARG CONFIG_FILE=./config.json
+ARG DEFAULT_PAYLOAD_FILE=./sample/payload-video.json
+
+RUN apk update && \
+    apk add -U ca-certificates gcc musl-dev python3 --no-cache && \
+    pip3 install streamlink && \
+        apk del gcc musl-dev --no-cache && \
+        rm -rf /tmp/* &&  \
+    rm -rf /var/lib/apt/lists
+
+RUN mkdir -p /app/adapter
+WORKDIR /app
+
+COPY --from=builder /go/src/github.com/veritone/engine-toolkit/release/bin/engine /app/
+COPY --from=builder /go/src/github.com/veritone/engine-toolkit/internal/controller/adapter/config.json /app/adapter/
+ADD ./manifest.json /var/manifest.json
+
+ENV CONFIG_FILE="/app/adapter/config.json"
+
+ENTRYPOINT ["/app/engine"]

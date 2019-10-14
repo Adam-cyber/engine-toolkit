@@ -1,0 +1,26 @@
+
+#
+# Building the adapter
+# will need the right manifest.json file
+#
+FROM engine-toolkit:base AS builder
+FROM jrottenberg/ffmpeg:4.1-alpine
+ARG MANIFEST_JSON=manifest.json
+
+RUN apk update && \
+    apk add -U ca-certificates gcc musl-dev python3 --no-cache && \
+    pip3 install streamlink && \
+        apk del gcc musl-dev --no-cache && \
+        rm -rf /tmp/* &&  \
+    rm -rf /var/lib/apt/lists
+
+RUN mkdir -p /app/adapter
+WORKDIR /app
+
+COPY --from=builder /app/engine /app/
+COPY config.json /app/adapter/
+ADD $(MANIFEST_JSON) /var/manifest.json
+
+ENV ADAPTER_CONFIG_FILE="/app/adapter/config.json"
+
+ENTRYPOINT ["/app/engine"]
