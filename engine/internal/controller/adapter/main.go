@@ -23,6 +23,7 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 const (
@@ -39,18 +40,13 @@ var (
 	httpURLRegexp            = regexp.MustCompile("(?i)^https?:/")
 )
 
-// errorReason is the struct has failure reason and error
-type errorReason struct {
-	error
-	failureReason messages.TaskFailureReason
-}
 
 // Streamer is the interface that wraps the Stream method
 type Streamer interface {
 	Stream(ctx context.Context, dur time.Duration) *streamio.Stream
 }
 
-type Adaptor struct {
+type adaptor struct {
 	engineInstanceId string
 	workItem         *controllerClient.EngineInstanceWorkItem
 	workItemStatus   *controllerClient.TaskStatusUpdate
@@ -64,12 +60,14 @@ type Adaptor struct {
 	kafkaClient messaging.Client
 }
 
+
+
 func NewAdaptor(payloadJSON string,
 	engineInstanceId string,
 	workItem *controllerClient.EngineInstanceWorkItem,
 	workItemStatus *controllerClient.TaskStatusUpdate,
 	graphQlTimeoutDuration string,
-	statusLock *sync.Mutex) (res *Adaptor, err error) {
+	statusLock *sync.Mutex) (res worker.Worker, err error) {
 
 	method := fmt.Sprintf("[AdaptorMain:engineId=%s, engineInstanceId=%s]", workItem.EngineId, engineInstanceId)
 	if graphQlTimeoutDuration == "" {
@@ -88,8 +86,8 @@ func NewAdaptor(payloadJSON string,
 		return nil, errors.Wrapf(err, "%s failed in loading payload/config", method)
 	}
 
-	log.Printf("config=%s", config)
-	log.Printf("payload=%s", payload)
+	log.Printf("config=%s", method, config)
+	log.Printf("payload=%s", method, payload)
 
 	streamio.TextMimeTypes = config.SupportedTextMimeTypes // weird!!
 
@@ -118,7 +116,7 @@ func NewAdaptor(payloadJSON string,
 		},
 	}
 
-	return &Adaptor{
+	return &adaptor{
 		engineInstanceId: engineInstanceId,
 		workItem:         workItem,
 		workItemStatus:   workItemStatus,
@@ -131,7 +129,8 @@ func NewAdaptor(payloadJSON string,
 	}, nil
 }
 
-func (a *Adaptor) Run() (err error) {
+
+func (a *adaptor) Run() (errReason worker.ErrorReason) {
 	method := fmt.Sprintf("[Adaptor.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -158,13 +157,13 @@ func (a *Adaptor) Run() (err error) {
 	// have to find the output
 	outputScfsArr, err := scfsio.GetIOForWorkItem(a.workItem, "output")
 	if err != nil {
-		return errors.Wrapf(err, "%s failed to get OutputIO", method)
+		return worker.ErrorReason{ errors.Wrapf(err, "%s failed to get OutputIO", method), messages.FailureReasonInternalError }
 	}
 	// for now, we're going to just assume 1 output???
 	scfsStreamWriter := NewSCFSIOWriter(outputScfsArr[0].String(), outputScfsArr[0].ScfsIO, a.payload.ChunkSize)
 	if err != nil {
-		return errorReason{
-			err,
+		return worker.ErrorReason{
+			errors.Wrap(err, "Error received when getting scfsStreamWriter"),
 			messages.FailureReasonFileWriteError,
 		}
 	}
@@ -220,16 +219,16 @@ func (a *Adaptor) Run() (err error) {
 		log.Println("Enabling S3 Stream Writer")
 		s3StreamWriter, err := NewS3StreamWriter(a.payload.CacheToS3Key, cacheCfg, onFinishFn)
 		if err != nil {
-			return errorReason{
-				err,
+			return worker.ErrorReason{
+				errors.Wrap(err, "Failed to get S3StreamWriter"),
 				messages.FailureReasonFileWriteError,
 			}
 		}
 
 		sw, err = NewTeeStreamWriter(s3StreamWriter, scfsStreamWriter)
 		if err != nil {
-			return errorReason{
-				err,
+			return worker.ErrorReason{
+				errors.Wrap(err, "Failed to get TeeStreamWriter"),
 				messages.FailureReasonFileWriteError,
 			}
 		}
@@ -251,7 +250,7 @@ func (a *Adaptor) Run() (err error) {
 		}
 
 		log.Println("Sending final heartbeat. Status:", string(status))
-		if err := hb.sendHeartbeat(ctx, status, err); err != nil {
+		if err := hb.sendHeartbeat(ctx, status, &worker.ErrorReason{Err:err, FailureReason:messages.FailureReasonOther}); err != nil {
 			log.Println("Failed to send final heartbeat:", err)
 		}
 	}()
@@ -268,16 +267,16 @@ func (a *Adaptor) Run() (err error) {
 			// fetch the URL from the Source configuration
 			coreAPIClient, err := api.NewCoreAPIClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
-				return errorReason{
-					fmt.Errorf("failed to initialize core API client: %s", err),
+				return worker.ErrorReason{
+					errors.Wrap(err,"failed to initialize core API client"),
 					messages.FailureReasonAPIError,
 				}
 			}
 
 			source, err := coreAPIClient.FetchSource(ctx, a.payload.SourceID)
 			if err != nil {
-				return errorReason{
-					fmt.Errorf("failed to fetch source %q: %s", a.payload.SourceID, err),
+				return worker.ErrorReason{
+					errors.Wrapf(err, "failed to fetch source %q", a.payload.SourceID),
 					messages.FailureReasonURLNotFound,
 				}
 			}
@@ -291,8 +290,8 @@ func (a *Adaptor) Run() (err error) {
 		} else if sourceDetails.RadioStreamURL != "" {
 			url = sourceDetails.RadioStreamURL
 		} else {
-			return errorReason{
-				fmt.Errorf("source %q does not have a URL field set", a.payload.SourceID),
+			return worker.ErrorReason{
+				errors.Wrapf(err, "source %q does not have a URL field set", a.payload.SourceID),
 				messages.FailureReasonAPINotFound,
 			}
 		}
@@ -313,14 +312,17 @@ func (a *Adaptor) Run() (err error) {
 		if strings.Contains(url, "veritone") && strings.Contains(url, "/media-streamer/stream") {
 			a.httpClient, err = api.NewAuthenticatedHTTPClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
-				return fmt.Errorf("http client err: %s", err)
+				return worker.ErrorReason {
+					errors.Wrap(err, "Getting AuthenticatedHTTPClient"),
+					messages.FailureReasonOther,
+				}
 			}
 		}
 
 		isImage, isText, mimeType, err := checkMIMEType(ctx, url, *a.httpClient)
 		if err != nil && err != streamio.ErrUnknownMimeType {
-			return errorReason{
-				err,
+			return worker.ErrorReason{
+				errors.Wrap(err, "Failed checkMIMEType"),
 				messages.FailureReasonInvalidData,
 			}
 		}
@@ -366,7 +368,7 @@ func (a *Adaptor) Run() (err error) {
 	return ingestStream(ctx, a.payload, isLive, sr, sw)
 }
 
-func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr Streamer, sw streamio.StreamWriter) error {
+func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr Streamer, sw streamio.StreamWriter) worker.ErrorReason {
 	runTime := time.Now().UTC()
 	recordStartTime := payload.RecordStartTime
 
@@ -383,7 +385,7 @@ func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr S
 	} else if !payload.RecordEndTime.IsZero() {
 		recordDuration = payload.RecordEndTime.Sub(recordStartTime)
 	} else if isLive {
-		return errorReason{
+		return worker.ErrorReason{
 			errMissingEndTime,
 			messages.FailureReasonInvalidData,
 		}
@@ -391,7 +393,7 @@ func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr S
 
 	if isLive {
 		if recordDuration <= 0 {
-			return errorReason{
+			return worker.ErrorReason{
 				errMissedRecordingWindow,
 				messages.FailureReasonInvalidData,
 			}
@@ -423,7 +425,7 @@ func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr S
 		stream.StartTime = time.Unix(payload.StartTimeOverride, 0).UTC()
 	}
 
-	errc := make(chan error, 2)
+	errc := make(chan worker.ErrorReason, 2)
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
@@ -432,8 +434,8 @@ func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr S
 		// listen for an error from stream reader
 		if err := stream.ErrWait(); err != nil {
 			log.Printf("stream reader err: %s", err)
-			errc <- errorReason{
-				fmt.Errorf("stream reader err: %s", err),
+			errc <- worker.ErrorReason{
+				errors.Wrap(err, "Failed in stream reader"),
 				messages.FailureReasonStreamReaderError,
 			}
 		}
@@ -441,8 +443,8 @@ func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr S
 
 	if err := sw.WriteStream(sctx, stream); err != nil {
 		log.Printf("stream writer err: %s", err)
-		errc <- errorReason{
-			fmt.Errorf("stream writer err: %s", err),
+		errc <- worker.ErrorReason{
+			errors.Wrap(err, "Failed in stream writer"),
 			messages.FailureReasonFileWriteError,
 		}
 	}

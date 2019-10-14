@@ -67,11 +67,11 @@ func (c *engineConfig) defaults() {
 	}
 
 	// Stuff in defaults to avoid loading the built config.json, since we may not be guaranteed of the file
-	config.Messaging.Kafka.ProducerMaxRetries = 1000
-	config.Messaging.Kafka.ProducerTimeout = "10s"
+	c.Messaging.Kafka.ProducerMaxRetries = 1000
+	c.Messaging.Kafka.ProducerTimeout = "10s"
 
-	config.VeritoneAPI.Timeout = "60s"
-	config.VeritoneAPI.GraphQLEndpoint = "/v3/graphql"
+	c.VeritoneAPI.Timeout = "60s"
+	c.VeritoneAPI.GraphQLEndpoint = "/v3/graphql"
 }
 
 type taskPayload struct {

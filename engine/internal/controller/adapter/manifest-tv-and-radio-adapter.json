@@ -1,6 +1,6 @@
 {
-	"engineId": "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4",
-	"url": "https://github.com/veritone/webstream-adapter",
+	"engineId": "74dfd76b-472a-48f0-8395-c7e01dd7fd24",
+	"url": "https://github.com/veritone/tv-and-radio-adapter/74dfd76b-472a-48f0-8395-c7e01dd7fd24/",
 	"category": "ingestion",
 	"engineMode": "stream",
 	"externalCalls": [],
@@ -12,6 +12,6 @@
 	"maxConcurrency": 50,
 	"schedule": "recurring",
 	"ingestion": {
-		"supportedSourceTypes": ["6"]
+		"supportedSourceTypes": ["1", "2"]
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"fmt"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 /**
@@ -173,19 +174,29 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 		fallthrough
 		// make sure they are the same
 	case engineIdWSA:
-		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId, &curWorkItem, &curStatus,
-			c.controllerConfig.GraphQLTimeoutDuration, &c.batchLock)
+		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
+			&curWorkItem, &curStatus,
+			c.controllerConfig.GraphQLTimeoutDuration,
+			&c.batchLock)
+		var errReason worker.ErrorReason
 		if err == nil {
-			err = adapter.Run()
+			errReason = adapter.Run()
 		}
-		if err != nil {
+		if errReason.Err != nil {
 			// print stuff
 			log.Printf("%s, Failed to run, err=%v", method, err)
-			// let's add to the status details
-			i
+			// Set TaskStatus accordingly.
+			// Status would be failed -- possible for stream engines since they are in control of
+			// the entire processing for the task
+			c.batchLock.Lock()
+			curStatus.FailureReason = string(errReason.FailureReason)
+			curStatus.ErrorCount ++
+			curStatus.TaskStatus = "failed"
+			c.batchLock.Unlock()
 		}
 
 	case engineIdSI2: // TODO
+
 	default:
 		panic("TO BE IMPLEMENTED")
 	}

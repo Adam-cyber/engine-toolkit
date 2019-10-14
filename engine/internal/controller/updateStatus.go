@@ -18,7 +18,7 @@ the rest is just housekeeping
 */
 func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
 	method := fmt.Sprintf("[UpdateEngineInstanceStatus:%s]", c.engineInstanceId)
-	// update status every N seconds
+	// update status every N (default is 5) seconds
 	updateStatusTimer := time.NewTimer(c.controllerConfig.updateStatusDuration)
 	for {
 		select {
@@ -56,7 +56,7 @@ func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
 				curEngineInstanceStatus, headerOpts)
 			if err != nil {
 				// TODO error handling
-				log.Printf("%s Got error calling UpdaetEngineInstanceStatus Controller API, err=%v", method, err)
+				log.Printf("%s Got error calling UpdateEngineInstanceStatus Controller API, err=%v", method, err)
 			} else {
 				// reset timestamps, processed cout
 				c.priorTimestamp = curEngineInstanceStatus.Timestamp

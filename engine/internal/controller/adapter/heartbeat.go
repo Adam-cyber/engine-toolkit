@@ -9,6 +9,7 @@ import (
 	"github.com/c2h5oh/datasize"
 	"github.com/veritone/edge-messages"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 type bytesReadTracker interface {
@@ -72,7 +73,7 @@ func (h *heartbeat) trackReads(br bytesReadTracker) {
 	h.bytesReadTracker = br
 }
 
-func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineStatus, err error) error {
+func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineStatus, err *worker.ErrorReason) error {
 	h.Lock()
 	defer h.Unlock()
 	h.index++
@@ -94,17 +95,11 @@ func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineSta
 	if h.bytesWrittenTracker != nil {
 		msg.BytesWritten = h.BytesWritten()
 	}
-	if err != nil {
-		errReason, ok := err.(errorReason)
-		if ok && errReason.error != nil {
-			msg.ErrorMsg = errReason.Error()
-			msg.FailureMsg = errReason.Error()
-			msg.FailureReason = errReason.failureReason
-		} else {
-			msg.ErrorMsg = err.Error()
-			msg.FailureMsg = err.Error()
-			msg.FailureReason = messages.FailureReasonOther
-		}
+	if err.Err != nil {
+			msg.ErrorMsg = err.Err.Error()
+			msg.FailureMsg = err.Err.Error()
+			msg.FailureReason = err.FailureReason
+
 	}
 	return h.messageClient.ProduceHeartbeatMessage(ctx, msg)
 }

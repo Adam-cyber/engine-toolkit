@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"os/exec"
 	"time"
-	"github.com/antihax/optional"
 )
 
 /**
@@ -120,7 +119,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	<-ctx.Done()
 
 	// one more ... tell Controller that we're terminated
-x
+	e.controller.Terminate(ctx)
 
 	return nil
 }
