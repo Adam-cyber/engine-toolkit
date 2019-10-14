@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/veritone/edge-stream-ingestor/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
 )
 
 const (

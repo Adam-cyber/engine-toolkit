@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"fmt"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
@@ -172,7 +173,6 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	switch curWorkItem.EngineId {
 	case engineIdTVRA:
 		fallthrough
-		// make sure they are the same
 	case engineIdWSA:
 		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
 			&curWorkItem, &curStatus,
@@ -190,14 +190,43 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			// the entire processing for the task
 			c.batchLock.Lock()
 			curStatus.FailureReason = string(errReason.FailureReason)
-			curStatus.ErrorCount ++
+			curStatus.ErrorCount++
 			curStatus.TaskStatus = "failed"
 			c.batchLock.Unlock()
 		}
 
-	case engineIdSI2: // TODO
+	case engineIdSI2:
+		si, err := siv2.NewStreamIngestor(payloadJSON, c.engineInstanceId,
+			&curWorkItem, &curStatus,
+			c.controllerConfig.GraphQLTimeoutDuration,
+			&c.batchLock)
+		var errReason worker.ErrorReason
+		if err == nil {
+			errReason = si.Run()
+		}
+		if errReason.Err != nil {
+			// print stuff
+			log.Printf("%s, Failed to run, err=%v", method, err)
+			c.batchLock.Lock()
+			curStatus.FailureReason = string(errReason.FailureReason)
+			curStatus.ErrorCount++
+			if getInputMode(&curWorkItem) != "chunk" {
+				curStatus.TaskStatus = "failed"
+			}
+			c.batchLock.Unlock()
+		}
 
 	default:
 		panic("TO BE IMPLEMENTED")
 	}
+}
+
+func getInputMode(w *controllerClient.EngineInstanceWorkItem) string {
+	ios := w.TaskIOs
+	for _, anIo := range ios {
+		if anIo.IoType == "input" {
+			return anIo.IoMode
+		}
+	}
+	return ""
 }

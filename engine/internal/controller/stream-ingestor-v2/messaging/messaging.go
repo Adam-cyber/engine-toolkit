@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	messages "github.com/veritone/edge-messages"
+	"github.com/veritone/edge-messages"
 )
 
 const (

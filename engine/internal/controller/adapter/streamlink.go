@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/armon/circbuf"
-	"github.com/veritone/edge-stream-ingestor/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
 )
 
 type streamlinkReader struct {

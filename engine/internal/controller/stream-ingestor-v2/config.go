@@ -9,19 +9,36 @@ import (
 	"strings"
 	"time"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/api"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/ingest"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/messaging"
+	"log"
 )
 
-const defaultHeartbeatInterval = "5s"
-const defaultConfigFilePath = "./adapter/config.json" // this should be copied over by Dockerfile
+const (
+	defaultHeartbeatInterval = "5s"
+
+	envVarMinioServer             = "MINIO_SERVER"
+	envVarMinioServerURLIPBased   = "MINIO_SERVER_URL_IP_BASED"
+	envVarMinioMediaSegmentBucket = "MINIO_MEDIA_SEGMENT_BUCKET"
+	envVarAwsKeyID                = "AWS_ACCESS_KEY_ID"
+	defaultGlobalTimeout          = "30m"
+	defaultFirstReadTimeout       = "10m"
+)
 
 var (
-	payloadFlag = flag.String("payload", "", "payload file")
-	configFlag  = flag.String("config", "", "config file")
-	tdoIDFlag   = flag.String("tdo", "", "Temporal data object ID (override payload)")
-	urlFlag     = flag.String("url", "", "Override URL to ingest")
-	stdoutFlag  = flag.Bool("stdout", false, "Write stream to stdout instead of Kafka")
+	payloadFlag       = flag.String("payload", "", "payload file")
+	configFlag        = flag.String("config", "", "config file")
+	tdoIDFlag         = flag.String("tdo", "", "Temporal data object ID (override payload)")
+	createTDOFlag     = flag.Bool("create-tdo", false, "Create a new temporal data object")
+	urlFlag           = flag.String("url", "", "Override URL to ingest")
+	stdinFlag         = flag.Bool("stdin", false, "Read stream from stdin pipe")
+	stdinMimeTypeFlag = flag.String("input-mimetype", "", "MIME-Type of stream on stdin")
+	stdinFormatFlag   = flag.String("input-format", "", "FFMPEG format of stream on stdin")
+	stdoutFlag        = flag.Bool("stdout", false, "Write stream to stdout")
+	outputFlag        = flag.String("out", "", "A file path to write the output stream to")
+	transcodeFlag     = flag.String("transcode", "", "FFMPEG format to transcode output stream to")
+	rawAssetFlag      = flag.Bool("save-raw", false, "Save raw stream as primary asset")
 )
 
 func init() {
@@ -29,17 +46,23 @@ func init() {
 }
 
 type engineConfig struct {
-	EngineID             string                 `json:"engineId,omitempty"`
-	EngineInstanceID     string                 `json:"engineInstanceId,omitempty"`
-	VeritoneAPI          api.Config             `json:"veritoneAPI,omitempty"`
-	Messaging            messaging.ClientConfig `json:"messaging,omitempty"`
-	HeartbeatInterval    string                 `json:"heartbeatInterval,omitempty"`
-	OutputTopicName      string                 `json:"outputTopicName,omitempty"`
-	OutputTopicPartition int32                  `json:"outputTopicPartition"`
-	OutputTopicKeyPrefix string                 `json:"outputTopicKeyPrefix"`
-	OutputBucketName     string                 `json:"outputBucketName,omitempty"`
-	OutputBucketRegion   string                 `json:"outputBucketRegion,omitempty"`
-	MinioServer          string                 `json:"minioServer,omitempty"`
+	ingest.IngestorConfig
+	EngineID               string                    `json:"engineId,omitempty"`
+	EngineInstanceID       string                    `json:"engineInstanceId,omitempty"`
+	VeritoneAPI            api.Config                `json:"veritoneAPI,omitempty"`
+	Messaging              messaging.ClientConfig    `json:"messaging,omitempty"`
+	AssetStorage           ingest.AssetStorageConfig `json:"assetStorage,omitempty"`
+	HeartbeatInterval      string                    `json:"heartbeatInterval,omitempty"`
+	OutputTopicName        string                    `json:"outputTopicName,omitempty"`
+	OutputTopicPartition   int32                     `json:"outputTopicPartition"`
+	OutputTopicKeyPrefix   string                    `json:"outputTopicKeyPrefix"`
+	InputTopicName         string                    `json:"inputTopicName,omitempty"`
+	InputTopicPartition    int32                     `json:"inputTopicPartition"`
+	InputTopicKeyPrefix    string                    `json:"inputTopicKeyPrefix"`
+	SupportedTextMimeTypes []string                  `json:"supportedTextMimeTypes,omitempty"`
+	GlobalTimeout          string                    `json:"globalTimeout,omitempty"`
+	FirstReadTimeout       string                    `json:"firstReadTimeout,omitempty"`
+	MediaStartTime         time.Time
 }
 
 func (c *engineConfig) String() string {
@@ -52,34 +75,87 @@ func (c *engineConfig) validate() error {
 		return fmt.Errorf(`invalid value for "heartbeatInterval": "%s" - %s`, c.HeartbeatInterval, err)
 	}
 
-	if (stdoutFlag == nil || !*stdoutFlag) && c.OutputTopicName == "" && c.OutputBucketName == "" {
-		return errors.New("an output topic or bucket name is required")
+	if _, err := time.ParseDuration(c.SegmentDuration); err != nil {
+		return fmt.Errorf(`invalid value for "segmentDuration": "%s" - %s`, c.SegmentDuration, err)
 	}
 
 	return nil
 }
 
 func (c *engineConfig) defaults() {
+	c.IngestorConfig.Defaults()
 	if c.HeartbeatInterval == "" {
 		c.HeartbeatInterval = defaultHeartbeatInterval
 	}
+	if c.GlobalTimeout == "" {
+		c.GlobalTimeout = defaultGlobalTimeout
+	}
+	if c.FirstReadTimeout == "" {
+		c.FirstReadTimeout = defaultFirstReadTimeout
+	}
+	if c.Chunking.ChunkOverlapDuration == "" {
+		c.Chunking.ChunkOverlapDuration = "0s"
+	}
+	c.FrameExtraction.ThumbnailRate = 60.0
+	c.AssetStorage.UsePresignedS3URLs = true
+	c.AssetStorage.Timeout = "1m"
+	c.WriteTimeout = "1m"
+	c.GlobalTimeout = "5m"
+
+	c.VeritoneAPI.Timeout = "30s"
+	c.VeritoneAPI.AssetTimeout = "1m"
+}
+
+func (c *engineConfig) applyOverrides(payload enginePayload) {
+	c.GenerateMediaAssets = payload.GenerateMediaAssets
+	c.OutputRawAsset = payload.OutputRawAsset
+	c.FrameExtraction.ExtractFramesPerSec = payload.ExtractFramesPerSec
+
+	if payload.SaveRawAsset != nil {
+		c.SaveRawAsset = *payload.SaveRawAsset
+	}
+	if payload.OutputChunkDuration != "" {
+		c.Chunking.ChunkDuration = payload.OutputChunkDuration
+	}
+	if payload.ChunkOverlapDuration != "" {
+		c.Chunking.ChunkOverlapDuration = payload.ChunkOverlapDuration
+	}
+	if payload.SegmentDuration != "" {
+		c.SegmentDuration = payload.SegmentDuration
+	}
+	if payload.OutputAudioChunks {
+		c.Chunking.ProduceAudioChunks = true
+	}
+	if payload.OutputVideoChunks {
+		c.Chunking.ProduceVideoChunks = true
+	}
+	if payload.OutputImageChunks {
+		c.Chunking.ProduceImageChunks = true
+	}
+}
+
+type inputPayload struct {
+	OrgID  string `json:"orgId,omitempty"`
+	JobID  string `json:"jobId,omitempty"`
+	TaskID string `json:"taskId,omitempty"`
 }
 
 type taskPayload struct {
-	RecordStartTime   time.Time `json:"recordStartTime,omitempty"`
-	RecordEndTime     time.Time `json:"recordEndTime,omitempty"`
-	RecordDuration    string    `json:"recordDuration,omitempty"`
-	StartTimeOverride int64     `json:"startTimeOverride,omitempty"`
-	URL               string    `json:"url,omitempty"`
-	DisableKafka      bool      `json:"disableKafka,omitempty"`
-	OrganizationID    int64     `json:"organizationId,omitempty"`
-
-	IoInputMode   string   `json:"ioInputMode,omitempty"` // input: chunk or stream
-	IoOutputMode  string   `json:"ioOutputMode,omitemty"` // output: chunk or stream
-	ffmpegOptions []string `json:"ffmpegOptions"`         // e.g. -i {inputfile} xxxx
-
-	// Optional here in the payload to see if this will speed up anything.. default is like 10K?
-	ChunkSize int64 `json:"chunkSize,omitempty"`
+	URL                  string    `json:"url,omitempty"`
+	StreamStartTime      time.Time `json:"streamStartTime,omitempty"`
+	GenerateMediaAssets  bool      `json:"generateMediaAssets"`
+	SaveRawAsset         *bool     `json:"saveRawAsset"`
+	OutputRawAsset       bool      `json:"outputRawAsset"`
+	OutputAudioChunks    bool      `json:"outputAudioChunks"`
+	OutputVideoChunks    bool      `json:"outputVideoChunks"`
+	OutputImageChunks    bool      `json:"outputImageChunks"`
+	SegmentDuration      string    `json:"segmentDuration,omitempty"`
+	OutputChunkDuration  string    `json:"outputChunkDuration,omitempty"`
+	ChunkOverlapDuration string    `json:"chunkOverlapDuration,omitempty"`
+	ExtractFramesPerSec  float64   `json:"extractFramesPerSec,omitempty"`
+	TranscodeFormat      string    `json:"transcodeFormat,omitempty"`
+	OrganizationID       int64     `json:"organizationId,omitempty"`
+	inputPayload         `json:"input,omitempty"`
 }
 
 type enginePayload struct {
@@ -104,77 +180,43 @@ func (p *enginePayload) defaults() {
 	if urlFlag != nil && *urlFlag != "" {
 		p.URL = *urlFlag
 	}
-	if p.ChunkSize == 0 {
-		p.ChunkSize = 16 * 1024 //16K
+	if transcodeFlag != nil && *transcodeFlag != "" {
+		p.TranscodeFormat = *transcodeFlag
 	}
-	if p.IoInputMode == "" {
-		p.IoInputMode = "stream"
+	if rawAssetFlag != nil && *rawAssetFlag {
+		*p.SaveRawAsset = true
 	}
-	if p.IoOutputMode == "" {
-		p.IoOutputMode = "chunk"
-	}
-}
-
-func (p *enginePayload) isTimeBased() bool {
-	return !p.RecordStartTime.IsZero() || !p.RecordEndTime.IsZero() || p.RecordDuration != ""
 }
 
 func (p *enginePayload) validate() error {
-
-	if p.TDOID == "" {
-		return errors.New("missing tdoId")
+	if !*createTDOFlag && p.TDOID == "" {
+		return errors.New("Missing tdoId from payload")
 	}
-
 	if p.JobID == "" {
-		return errors.New("missing jobId")
+		return errors.New("Missing jobId from payload")
 	}
 	if p.TaskID == "" {
-		return errors.New("missing taskId")
+		return errors.New("Missing taskId from payload")
+	}
+	if !*stdinFlag && p.URL == "" && os.Getenv("STREAM_INPUT_TOPIC") == "" {
+		return errors.New("either a stream input topic or URL is required")
 	}
 
-	if p.RecordDuration != "" {
-		if !p.RecordStartTime.IsZero() || !p.RecordEndTime.IsZero() {
-			return errors.New(`only one of "recordDuration" or "recordStartTime"/"recordEndTime" should be provided`)
-		}
-		if _, err := time.ParseDuration(p.RecordDuration); err != nil {
-			return fmt.Errorf(`invalid record duration given "%s": %s`, p.RecordDuration, err)
+	if p.OutputChunkDuration != "" {
+		if _, err := time.ParseDuration(p.OutputChunkDuration); err != nil {
+			return fmt.Errorf(`invalid value given for "outputChunkDuration": %q - %s`, p.OutputChunkDuration, err)
 		}
 	}
-
-	if p.RecordEndTime.IsZero() && !p.RecordStartTime.IsZero() {
-		return errors.New(`"recordEndTime" is required when "recordStartTime" is set`)
+	if p.ChunkOverlapDuration != "" {
+		if _, err := time.ParseDuration(p.ChunkOverlapDuration); err != nil {
+			return fmt.Errorf(`invalid value given for "chunkOverlapDuration": %q - %s`, p.ChunkOverlapDuration, err)
+		}
 	}
 
 	return nil
 }
 
-func loadPayloadFromFile(p interface{}, payloadFilePath string) error {
-	if payloadFilePath == "" {
-		return errors.New("no payload file specified")
-	}
-
-	reader, err := os.Open(payloadFilePath)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(p)
-}
-
-func loadConfigFromFile(c interface{}, configFilePath string) error {
-	if configFilePath == "" {
-		configFilePath = defaultConfigFilePath
-	}
-
-	reader, err := os.Open(configFilePath)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-	return json.NewDecoder(reader).Decode(c)
-}
-
-func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string) (*engineConfig, *enginePayload, error) {
+func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string, graphQlTimeoutDuration string) (*engineConfig, *enginePayload, error) {
 	payload, config := new(enginePayload), new(engineConfig)
 
 	if err := json.Unmarshal([]byte(payloadJSON), payload); err != nil {
@@ -186,10 +228,6 @@ func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string)
 		return config, payload, fmt.Errorf("invalid payload: %s", err)
 	}
 
-	// load config from file
-	if err := loadConfigFromFile(config, *configFlag); err != nil {
-		return config, payload, err
-	}
 	config.defaults()
 
 	config.EngineID = engineID
@@ -198,26 +236,51 @@ func loadConfigAndPayload(payloadJSON string, engineID, engineInstanceID string)
 	if kafkaBrokers := os.Getenv("KAFKA_BROKERS"); len(kafkaBrokers) > 0 {
 		config.Messaging.Kafka.Brokers = strings.Split(kafkaBrokers, ",")
 	}
-	if engineStatusTopic := os.Getenv("KAFKA_ENGINE_STATUS_TOPIC"); len(engineStatusTopic) > 0 {
-		config.Messaging.MessageTopics.EngineStatus = engineStatusTopic
+	if chunkQueueTopic := os.Getenv("KAFKA_CHUNK_TOPIC"); len(chunkQueueTopic) > 0 {
+		config.Messaging.MessageTopics.ChunkQueue = chunkQueueTopic
+	}
+	if heartbeatTopic := os.Getenv("KAFKA_HEARTBEAT_TOPIC"); len(heartbeatTopic) > 0 {
+		config.Messaging.MessageTopics.EngineStatus = heartbeatTopic
 	}
 	if apiBaseURL := os.Getenv("VERITONE_API_BASE_URL"); len(apiBaseURL) > 0 {
 		config.VeritoneAPI.BaseURL = apiBaseURL
 	}
+	if chunkCacheBucket := os.Getenv("CHUNK_CACHE_BUCKET"); len(chunkCacheBucket) > 0 {
+		config.Chunking.Cache.Bucket = chunkCacheBucket
+	}
+	if chunkCacheRegion := os.Getenv("CHUNK_CACHE_AWS_REGION"); len(chunkCacheRegion) > 0 {
+		config.Chunking.Cache.Region = chunkCacheRegion
+	}
+	if config.Messaging.Kafka.ClientIDPrefix == "" {
+		config.Messaging.Kafka.ClientIDPrefix = "SIv2" + "_"
+	}
 	if streamOutputTopic := os.Getenv("STREAM_OUTPUT_TOPIC"); len(streamOutputTopic) > 0 {
 		config.OutputTopicName, config.OutputTopicPartition, config.OutputTopicKeyPrefix = messaging.ParseStreamTopic(streamOutputTopic)
 	}
-	if outputBucketName := os.Getenv("CHUNK_CACHE_BUCKET"); len(outputBucketName) > 0 {
-		config.OutputBucketName = outputBucketName
+	if streamInputTopic := os.Getenv("STREAM_INPUT_TOPIC"); len(streamInputTopic) > 0 {
+		config.InputTopicName, config.InputTopicPartition, config.InputTopicKeyPrefix = messaging.ParseStreamTopic(streamInputTopic)
 	}
-	if minioServer := os.Getenv("MINIO_SERVER"); len(minioServer) > 0 {
-		config.MinioServer = minioServer
+	if minioServer := os.Getenv(envVarMinioServer); len(minioServer) > 0 {
+		config.Chunking.Cache.MinioServer = minioServer
+		config.AssetStorage.MinioStorage.MinioServer = minioServer
+		log.Printf("minio server: %s", config.Chunking.Cache.MinioServer)
+		log.Printf("minio server set into Media Segment Config: %s", config.AssetStorage.MinioStorage.MinioServer)
+		log.Printf("access key: %s", os.Getenv(envVarAwsKeyID))
 	}
-	if region := os.Getenv("CHUNK_CACHE_AWS_REGION"); len(region) > 0 {
-		config.OutputBucketRegion = region
+	//This env. variable would be coming from SEM for Portable Edge Flow. Please check the docker-compose.yml file's SEM service section
+	//This IP based URL is used for asset upload into Minio
+	if minioServerURLIPBased := os.Getenv(envVarMinioServerURLIPBased); len(minioServerURLIPBased) > 0 {
+		config.AssetStorage.MinioStorage.MinioServerURLIPBased = minioServerURLIPBased
+		log.Printf("minio server ip based: %s", config.AssetStorage.MinioStorage.MinioServerURLIPBased)
+	}
+	//This env. variable would be coming from SEM for Portable Edge Flow. Please check the docker-compose.yml file's SEM service section
+	//This is the minio bucket into which the Asset would beuploaded
+	if minioMediaSegmentBucket := os.Getenv(envVarMinioMediaSegmentBucket); len(minioMediaSegmentBucket) > 0 {
+		config.AssetStorage.MinioStorage.MediaSegmentBucket = minioMediaSegmentBucket
+		log.Printf("minio server media segment bucket: %s", config.AssetStorage.MinioStorage.MediaSegmentBucket)
 	}
 
-	config.VeritoneAPI.CorrelationID = engineID + ":" + config.EngineInstanceID
+	config.VeritoneAPI.CorrelationID = config.EngineInstanceID
 
 	return config, payload, config.validate()
 }

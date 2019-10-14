@@ -96,9 +96,9 @@ func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineSta
 		msg.BytesWritten = h.BytesWritten()
 	}
 	if err.Err != nil {
-			msg.ErrorMsg = err.Err.Error()
-			msg.FailureMsg = err.Err.Error()
-			msg.FailureReason = err.FailureReason
+		msg.ErrorMsg = err.Err.Error()
+		msg.FailureMsg = err.Err.Error()
+		msg.FailureReason = err.FailureReason
 
 	}
 	return h.messageClient.ProduceHeartbeatMessage(ctx, msg)

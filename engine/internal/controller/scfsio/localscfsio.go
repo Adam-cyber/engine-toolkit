@@ -4,8 +4,10 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"github.com/veritone/realtime/modules/scfs"
 
+	"encoding/json"
 	"fmt"
 	"github.com/veritone/realtime/modules/logger"
+	"time"
 )
 
 // preparing input and output
@@ -19,6 +21,51 @@ type LocalIOStruct struct {
 
 func (l *LocalIOStruct) String() string {
 	return l.id
+}
+
+type jobDefinition struct {
+	Id    string        `json:"id"`
+	Tasks []minTaskInfo `json:"tasks"`
+}
+type minRuntimePayload struct {
+	RecordStartTime string `json:"recordStartTime"`
+	RecordEndTime   string `json:"recordEndTime"`
+}
+type minTaskInfo struct {
+	Id             string            `json:"id"`
+	EngineId       string            `json:"engineId"`
+	RuntimePayload minRuntimePayload `json:"runtimePayload"`
+}
+
+func GetMediaStartTime(workItem *controllerClient.EngineInstanceWorkItem) (startTime time.Time) {
+	sOrg := fmt.Sprintf("%d", workItem.OrganizationId)
+	scfsCache := scfs.NewCache("/", sOrg, logger.NewLogger())
+
+	scfsOrg, err := scfsCache.GetOrg(sOrg)
+	if err != nil {
+		return
+	}
+	scfsJob, err := scfsOrg.GetJob(workItem.JobId)
+	if err != nil {
+		return
+	}
+	if sJobDef, err := scfsJob.GetDefinition(); err == nil {
+		jd := &jobDefinition{}
+		if err := json.Unmarshal([]byte(sJobDef), jd); err == nil {
+			if jd != nil {
+				for _, task := range jd.Tasks {
+					if task.RuntimePayload.RecordStartTime != "" {
+						t, err := time.Parse(time.RFC3339, task.RuntimePayload.RecordStartTime)
+						if err == nil {
+							return t
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	return
 }
 func GetIOForWorkItem(workItem *controllerClient.EngineInstanceWorkItem, ioType string) (res []LocalIOStruct, err error) {
 	res = make([]LocalIOStruct, 0)

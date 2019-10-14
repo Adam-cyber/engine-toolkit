@@ -123,3 +123,5 @@ vendors:
   rev: 363118e62befa8a14ff01031c025026077fe5d6d
 - path: gopkg.in/jcmturner/rpc.v1
   rev: 99a8ce2fbf8b8087b6ed12a37c61b10f04070043
+- path: github.com/mezzi/tail
+  rev: 6a36ad31bd4845f931bf291e36ebd7f14ed4768e

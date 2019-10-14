@@ -8,8 +8,9 @@ import (
 
 	"github.com/c2h5oh/datasize"
 	messages "github.com/veritone/edge-messages"
-	"github.com/veritone/edge-stream-ingestor/messaging"
-	"github.com/veritone/edge-stream-ingestor/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 var lastStreamInfo map[string]interface{}
@@ -47,7 +48,7 @@ func startHeartbeat(ctx context.Context, messageClient *messaging.Helper, heartb
 	}
 
 	// send the first heartbeat
-	err := hb.sendHeartbeat(ctx, messages.EngineStatusRunning, nil, nil)
+	err := hb.sendHeartbeat(ctx, messages.EngineStatusRunning, worker.ErrorReason{}, nil)
 	if err != nil {
 		logger.Println("WARNING: heartbeat message failed:", err)
 	}
@@ -62,7 +63,7 @@ func startHeartbeat(ctx context.Context, messageClient *messaging.Helper, heartb
 			case info = <-hb.infoc: // info sent on this chan is sent with the next heartbeat
 				lastStreamInfo = info
 			case <-time.Tick(heartbeatInterval):
-				err := hb.sendHeartbeat(ctx, messages.EngineStatusRunning, nil, info)
+				err := hb.sendHeartbeat(ctx, messages.EngineStatusRunning, worker.ErrorReason{}, info)
 				if err != nil {
 					logger.Println("WARNING: heartbeat message failed:", err)
 				}
@@ -92,7 +93,7 @@ func (h *heartbeat) trackWrites(w bytesWrittenTracker) {
 	}
 }
 
-func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineStatus, err error, info map[string]interface{}) error {
+func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineStatus, err worker.ErrorReason, info map[string]interface{}) error {
 	h.Lock()
 	defer h.Unlock()
 
@@ -128,18 +129,10 @@ func (h *heartbeat) sendHeartbeat(ctx context.Context, status messages.EngineSta
 		msg.InfoMsg = string(infoJSONBytes)
 	}
 
-	if err != nil {
-		errReason, ok := err.(errorReason)
-		if ok && errReason.error != nil {
-			msg.ErrorMsg = errReason.Error()
-			msg.FailureMsg = errReason.Error()
-			msg.FailureReason = errReason.failureReason
-		} else {
-			msg.ErrorMsg = err.Error()
-			msg.FailureMsg = err.Error()
-			msg.FailureReason = messages.FailureReasonOther
-		}
-		// TODO: Set msg.FailureReason per VTN-19698
+	if err.Err != nil {
+		msg.ErrorMsg = err.Err.Error()
+		msg.FailureMsg = err.Err.Error()
+		msg.FailureReason = err.FailureReason
 	}
 
 	if msg.Status == messages.EngineStatusDone || msg.Status == messages.EngineStatusFailed {

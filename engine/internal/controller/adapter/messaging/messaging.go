@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	messages "github.com/veritone/edge-messages"
+	 "github.com/veritone/edge-messages"
 )
 
 const (

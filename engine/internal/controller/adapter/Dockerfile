@@ -7,6 +7,10 @@ FROM engine-toolkit:base AS builder
 FROM jrottenberg/ffmpeg:4.1-alpine
 ARG MANIFEST_JSON=manifest.json
 ARG ENGINE_ID
+ARG gitbranch
+ARG githash
+ARG release
+ARG builddate
 
 RUN apk update && \
     apk add -U ca-certificates gcc musl-dev python3 --no-cache && \
@@ -15,12 +19,14 @@ RUN apk update && \
         rm -rf /tmp/* &&  \
     rm -rf /var/lib/apt/lists
 
-RUN mkdir -p /app/adapter
 WORKDIR /app
 
+ENV RELEASE_NOTES="etversion=${release};builddate=${builddate};branch=${gitbranch};commit=${githash}"
 COPY --from=builder /app/engine /app/
 ADD ${MANIFEST_JSON} /var/manifest.json
+RUN sed -i "s#RELEASE_NOTES#$RELEASE_NOTES#g" /var/manifest.json
 #ADD manifest-tv-and-radio-adaptor.json /app
+
 #ADD manifest-webstream-adapter.json /app
 #RUN cp /app/${MANIFEST_JSON} /var/manifest.json
 

@@ -13,5 +13,6 @@
 	"schedule": "recurring",
 	"ingestion": {
 		"supportedSourceTypes": ["1", "2"]
-	}
+	},
+        "releaseNotes": "RELEASE_NOTES"
 }

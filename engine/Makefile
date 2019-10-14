@@ -1,7 +1,9 @@
 githash = $(shell git rev-parse HEAD)
 release = v0.1.16
+gitbranch = $(shell git rev-parse --abbrev-ref HEAD)
+builddate = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
-ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(shell date -u '+%Y-%m-%d_%H:%M:%S') -X main.BuildTag=$(githash)
+ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(builddate) -X main.BuildTag=$(githash)
 
 .PHONY: clean test buildrelease release
 
@@ -43,8 +45,21 @@ BASE_IMAGE = engine-toolkit:base
 build-base-docker:
 	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
 
-build-wsa-adapter-docker: # build-base-docker
-	cd internal/controller/adapter; docker build -t webstream-adapter --build-arg MANIFEST_JSON=manifest-webstream-adapter.json --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" .
+build-webstream-adapter-docker: # build-base-docker
+	cd internal/controller/adapter; docker build -t webstream-adapter --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
+            --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+           .
 
 build-tv-and-radio-adapter-docker: #build-base-docker
-	cd internal/controller/adapter; docker build -t tv-and-radio-adapter --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" .
+	cd internal/controller/adapter; docker build -t tv-and-radio-adapter \
+            --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
+            --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .

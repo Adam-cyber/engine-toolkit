@@ -110,8 +110,8 @@ func NewGraphQLClient(config Config, token string) (CoreAPIClient, error) {
 		graphql.WithBeforeRetryHandler(beforeRetryHandler))
 
 	if config.Debug {
-		baseClient.Log = func(s string) { log.Println(s) }
-		assetClient.Log = baseClient.Log
+		baseClient.SetLogger( func(s string) { log.Println(s) } )
+		assetClient.SetLogger ( func(s string) { log.Println(s) })
 	}
 
 	return &graphQLClient{

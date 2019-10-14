@@ -1,10 +1,10 @@
-package adapter
+package scfsio
 
 import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/veritone/edge-stream-ingestor/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
 	"github.com/veritone/realtime/modules/scfs"
 	"io"
 	"log"

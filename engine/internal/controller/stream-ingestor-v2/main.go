@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -15,20 +13,27 @@ import (
 
 	messages "github.com/veritone/edge-messages"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/api"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/ingest"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/messaging"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
+
+	"encoding/json"
+	"github.com/google/uuid"
 )
 
 const (
-	appName     = "SIv2"
-	maxAttempts = 5
+	appName          = "SIv2"
+	maxAttempts      = 5
+	videoTDOMimeType = "video/mp4"
+	audioTDOMimeType = "audio/mp4"
 )
 
 var (
-	hb                       *heartbeat
 	errMissedRecordingWindow = errors.New("we've overshot our recording window completely")
 	errMissingEndTime        = errors.New("recording window must have an end time")
 	sleepFunc                = time.Sleep
@@ -36,7 +41,6 @@ var (
 	rtspURLRegexp            = regexp.MustCompile("(?i)^rtsp:/")
 	httpURLRegexp            = regexp.MustCompile("(?i)^https?:/")
 )
-
 
 type internalEngine struct {
 	engineInstanceId string
@@ -51,15 +55,23 @@ type internalEngine struct {
 	kafkaClient messaging.Client
 }
 
+var (
+	logger        = log.New(os.Stderr, "[ main ] ", log.LstdFlags)
+	transcodeFn   = ingest.TranscodeStream
+	probeFn       = streamio.ProbeStream
+	hb            *heartbeat
+	graphQLClient api.CoreAPIClient
+)
 
 func NewStreamIngestor(payloadJSON string,
 	engineInstanceId string,
 	workItem *controllerClient.EngineInstanceWorkItem,
 	workItemStatus *controllerClient.TaskStatusUpdate,
+	graphQlTimeoutDuration string,
 	statusLock *sync.Mutex) (res worker.Worker, err error) {
 
 	method := fmt.Sprintf("[siV2:%s]", engineInstanceId)
-	config, payload, err := loadConfigAndPayload(payloadJSON, workItem.EngineId, engineInstanceId)
+	config, payload, err := loadConfigAndPayload(payloadJSON, workItem.EngineId, engineInstanceId, graphQlTimeoutDuration)
 	if err != nil {
 		// TODO better error ...
 		statusLock.Lock()
@@ -71,6 +83,7 @@ func NewStreamIngestor(payloadJSON string,
 		log.Printf("%s failed to load payload or config, err=%v", method, err)
 		return nil, errors.Wrapf(err, "%s failed in loading payload/config", method)
 	}
+	config.applyOverrides(*payload)
 
 	log.Printf("config=%s", config)
 	log.Printf("payload=%s", payload)
@@ -116,224 +129,420 @@ TaskPayload should spell out what the engine needs to do.
 
 payload :
      action:  transcode, chunking, playback
-     options: ffmpeg Options e.g  -i {inputfile} xxxx {output}
-			For {inputfile} == this comes from the task'input source -- for stream we'll consume in its entirety
-                           Even with chunk, it may just be a mini-stream
-
+     ffmpegOptions: command line args for ffmpeg, e.g.
+            -i {inputfile} -ac ... {outputfile}
+		  which siv2 then will invoke with `ffmpeg` with the final CLI args where the inputfile, outputfile will be adjusted accordingly
+     inputIOMode / outputIOMode
 
 	   when action == transcode:
             If the inputIOMode == stream:  SIv2 is to consume a stream from the input --> run ffmpeg command with the options --> produce stream as output
             If the inputIOMode == chunk: SIv2 is to consume chunks from the input -> run ffmpeg command with the options --> produce chunks
 
        When action == chunking:
-            SIv2 is to consume a stream --> run ffmpeg command with the options --> produce chunks
+            SIv2 is to consume a stream --> run ffmpeg command with the ffmpegOptions --> produce chunks
 
        When action == playback
-            SIv2 is to consume a stream --> run ffmpeg command with the options --> produce segments to be stored as assets in the TDO for playback
+            SIv2 is to consume a stream --> run ffmpeg command with the ffmpegOptions --> produce segments to be stored as assets in the TDO for playback
 
 
- */
 
- func (a *internalEngine) Run() (err worker.ErrorReason) {
-	method := fmt.Sprintf("[Siv2.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
+       Most combinations of input/outputIOMode are valid with the exception out  input chunk, output stream...
+             since there's no guaranteed that the chunks are in order
+             and thus the output stream may be invalid due to timing issues.
+
+
+NOTE:  we need to support segment, chunk first!!
+
+*/
+
+func (e *internalEngine) Run() (errReason worker.ErrorReason) {
+	method := fmt.Sprintf("[Siv2.Run:%s,%s,%s]", e.workItem.EngineId, e.engineInstanceId, e.workItem.TaskId)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer func() {
-		if a.kafkaClient != nil {
-			a.kafkaClient.Close()
+		if e.kafkaClient != nil {
+			e.kafkaClient.Close()
 		}
 	}()
 	// Create messaging helper - used for heartbeats and stream writer
-	msgr := messaging.NewHelper(a.kafkaClient, a.config.Messaging, messaging.MessageContext{
-		JobID:      a.payload.JobID,
-		TaskID:     a.payload.TaskID,
-		TDOID:      a.payload.TDOID,
-		EngineID:   a.config.EngineID,
-		InstanceID: a.config.EngineInstanceID,
+	messagingClient := messaging.NewHelper(e.kafkaClient, e.config.Messaging, messaging.MessageContext{
+		JobID:      e.payload.JobID,
+		TaskID:     e.payload.TaskID,
+		TDOID:      e.payload.TDOID,
+		EngineID:   e.config.EngineID,
+		InstanceID: e.config.EngineInstanceID,
 	})
 
-
-	// stream writer
-	var sw streamio.StreamWriter
-	var onCloseFn func(error, int64)
-
-	// get the taskIO for output stream
-	// have to find the output
-	outputScfsArr, err := scfsio.GetIOForWorkItem(a.workItem, "output")
-	if err != nil {
-		return errors.Wrapf(err, "%s failed to get OutputIO", method)
-	}
-
-	// here goes
-
 	// start engine status heartbeats
-	heartbeatInterval, _ := time.ParseDuration(a.config.HeartbeatInterval)
-	hb = startHeartbeat(ctx, msgr, heartbeatInterval, sw, a.payload.isOfflineMode())
+	// TODO consolidate this into engine-toolkit
+	heartbeatInterval, _ := time.ParseDuration(e.config.HeartbeatInterval)
+	hb = startHeartbeat(ctx, messagingClient, heartbeatInterval)
 
 	defer func() {
-		if onCloseFn != nil {
-			onCloseFn(err, hb.GetTaskUpTime())
-		}
 		// send final heartbeat
 		status := messages.EngineStatusDone
-		if err != nil {
-			status = messages.EngineStatusFailed
-		}
 
 		log.Println("Sending final heartbeat. Status:", string(status))
-		if err := hb.sendHeartbeat(ctx, status, err); err != nil {
+		if err := hb.sendHeartbeat(ctx, status, worker.ErrorReason{}, lastStreamInfo); err != nil {
 			log.Println("Failed to send final heartbeat:", err)
 		}
 	}()
+	var (
+		sr  streamio.Streamer
+		sw  streamio.StreamWriter
+		tdo *api.TDO
+	)
+	// get the taskIO for output stream
+	// have to find the output
+	inputScfsArr, err := scfsio.GetIOForWorkItem(e.workItem, "input")
+	if err != nil {
+		return worker.ErrorReason{
+			Err:           errors.Wrapf(err, "%s failed to get Input IO", method),
+			FailureReason: messages.FailureReasonInternalError,
+		}
+	}
+	sr = scfsio.NewSCFSIOReader(
+		fmt.Sprintf("Reader:", inputScfsArr[0].ScfsIO.GetPath()),
+		inputScfsArr[0].ScfsIO)
+	/** TODO
+	 //RIGHT NOW WE"ll do the hls etc first since that put the medis in the tdo!
+	 outputScfsArr, err := scfsio.GetIOForWorkItem(e.workItem, "output")
+	 if err != nil {
+		 return worker.ErrorReason{
+			 Err: errors.Wrapf(err, "%s failed to get Output IO", method),
+			 FailureReason: messages.FailureReasonInternalError,
+		 }
+	 }
+	*/
+	e.config.MediaStartTime = scfsio.GetMediaStartTime(e.workItem)
+	if e.payload.URL != "" { // offline ingestion
+		log.Println("reading stream from URL:", e.payload.URL)
+		sr = streamio.NewHTTPStreamer(streamio.DefaultHTTPClient, e.payload.URL)
+	}
 
-	return ingestStream(ctx, a.payload, isLive, sr, sw)
+	if e.config.IsAssetProducer() || e.config.IsChunkProducer() {
+		var chunkCache streamio.Cacher
+		var assetStore *ingest.AssetStore
+
+		tdoArg := &api.TDO{
+			ID:      e.payload.TDOID,
+			Details: make(map[string]interface{}),
+		}
+
+		// set up asset store if generating assets
+		if e.config.IsAssetProducer() {
+			// payload token overrides token from environment variable
+			apiToken := os.Getenv("VERITONE_API_TOKEN")
+			if e.payload.Token != "" {
+				apiToken = e.payload.Token
+			}
+
+			graphQLClient, err = api.NewGraphQLClient(e.config.VeritoneAPI, apiToken)
+			if err != nil {
+				return worker.ErrorReason{
+					fmt.Errorf("failed to initialize GraphQL client: %s", err),
+					messages.FailureReasonAPINotAllowed,
+				}
+			}
+
+			tdo, err = setupTDO(ctx, e.payload)
+			if err != nil {
+				return worker.ErrorReason{
+					Err:           err,
+					FailureReason: messages.FailureReasonAPIError,
+				}
+			}
+			tdoArg = tdo
+
+			// set up asset storage handler
+			assetStore, err = ingest.InitAssetStore(e.config.AssetStorage, graphQLClient, tdo)
+			if err != nil {
+				return worker.ErrorReason{
+					fmt.Errorf("failed to initialize asset storage: %s", err),
+					messages.FailureReasonOther,
+				}
+			}
+		}
+
+		// set up chunk cache if outputting chunks
+		if e.config.IsChunkProducer() {
+			chunkCache, err = streamio.NewS3ChunkCache(e.config.Chunking.Cache)
+			if err != nil {
+				return worker.ErrorReason{
+					fmt.Errorf("failed to initialize chunk cache: %s", err),
+					messages.FailureReasonOther,
+				}
+			}
+		}
+
+		if sw != nil {
+			sw, err = initStreamIngestor(e.config.IngestorConfig, tdoArg, messagingClient, chunkCache, assetStore, sw)
+		} else {
+			sw, err = initStreamIngestor(e.config.IngestorConfig, tdoArg, messagingClient, chunkCache, assetStore)
+		}
+
+		if err != nil {
+			return worker.ErrorReason{
+				err,
+				messages.FailureReasonInternalError,
+			}
+		}
+	}
+	return ingestStream(ctx, e.payload, sr, sw, tdo, e.config)
 }
-
-func ingestStream(ctx context.Context, payload *enginePayload, isLive bool, sr Streamer, sw streamio.StreamWriter) error {
-	runTime := time.Now().UTC()
-	recordStartTime := payload.RecordStartTime
-
-	if recordStartTime.IsZero() {
-		recordStartTime = runTime
-	} else if runTime.After(recordStartTime) {
-		log.Printf("We've overshot our recording window. Setting start time to %s.", runTime.Format(time.RFC3339))
-		recordStartTime = runTime
-	}
-
-	var recordDuration time.Duration
-	if payload.RecordDuration != "" {
-		recordDuration, _ = time.ParseDuration(payload.RecordDuration)
-	} else if !payload.RecordEndTime.IsZero() {
-		recordDuration = payload.RecordEndTime.Sub(recordStartTime)
-	} else if isLive {
-		return errorReason{
-			errMissingEndTime,
-			messages.FailureReasonInvalidData,
-		}
-	}
-
-	if isLive {
-		if recordDuration <= 0 {
-			return errorReason{
-				errMissedRecordingWindow,
-				messages.FailureReasonInvalidData,
-			}
-		}
-
-		log.Printf("Recording stream %s from %s to %s.",
-			payload.URL,
-			recordStartTime.Format(time.RFC3339),
-			recordStartTime.Add(recordDuration).Format(time.RFC3339))
-	}
-
-	// sleep until start time
-	if now := time.Now().UTC(); now.Before(recordStartTime) {
-		sleepTime := recordStartTime.Sub(now)
-		log.Printf("Sleeping for %s", sleepTime.String())
-		sleepFunc(sleepTime)
-	}
-
-	sctx, cancel := context.WithCancel(ctx)
-	stream := sr.Stream(sctx, recordDuration)
-	hb.trackReads(stream) // track stream progress in heartbeats
-
-	// if payload specifies an offset in the TDO, pass it along in stream_init message
-	if payload.TDOOffsetMS > 0 {
-		stream.StartOffsetMS = payload.TDOOffsetMS
-	}
-	// if payload specifies a start time override, pass it along in stream_init message
-	if payload.StartTimeOverride > 0 {
-		stream.StartTime = time.Unix(payload.StartTimeOverride, 0).UTC()
-	}
-
-	errc := make(chan error, 2)
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer stream.Close()
-		// listen for an error from stream reader
-		if err := stream.ErrWait(); err != nil {
-			log.Printf("stream reader err: %s", err)
-			errc <- errorReason{
-				fmt.Errorf("stream reader err: %s", err),
-				messages.FailureReasonStreamReaderError,
-			}
-		}
-	}()
-
-	if err := sw.WriteStream(sctx, stream); err != nil {
-		log.Printf("stream writer err: %s", err)
-		errc <- errorReason{
-			fmt.Errorf("stream writer err: %s", err),
+func ingestStream(ctx context.Context, payload *enginePayload, sr streamio.Streamer, sw streamio.StreamWriter, tdo *api.TDO, config *engineConfig) worker.ErrorReason {
+	if sw == nil {
+		return worker.ErrorReason{
+			errors.New("must specify a stream writer"),
 			messages.FailureReasonFileWriteError,
 		}
 	}
 
-	cancel() // cancel stream reader if it has not stopped already
-	wg.Wait()
-	close(errc)
-	return <-errc
-}
+	sctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	firstReadTimeout, _ := time.ParseDuration(config.FirstReadTimeout)
 
-func urlHasFileExtension(urlStr string, suffixes ...string) bool {
-	u, err := url.Parse(urlStr)
+	stream, err := streamio.StartStreamReader(sctx, cancel, sr, firstReadTimeout)
+	if !config.MediaStartTime.IsZero() {
+		stream.StartTime = config.MediaStartTime
+	}
+
+	defer func() {
+		stream.Close()
+	}()
+
+	hb.trackStream(stream)
+	hb.trackWrites(sw)
+
 	if err != nil {
-		log.Printf("Unable to parse url: %s, %s", urlStr, err)
-		return false
-	}
-	for _, v := range suffixes {
-		if strings.HasSuffix(u.Path, v) {
-			return true
-		}
-	}
-	return false
-}
-
-func checkMIMEType(ctx context.Context, urlStr string, httpClient http.Client) (bool, bool, string, error) {
-	var stream *streamio.Stream
-	var err error
-
-	interval := intialRetryInterval
-	httpClient.Timeout = time.Second * 15
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if attempt > 1 {
-			time.Sleep(interval)
-			interval = exponentialIncrInterval(interval)
-			log.Printf("RETRYING: ATTEMPT %d of %d", attempt, maxAttempts)
+		logger.Println(err)
+		if err := stream.Err(); err != nil {
+			logger.Printf("[2] stream reader err: %s", err)
 		}
 
-		stream, err = tryDetermineMimeType(ctx, &httpClient, urlStr)
-		if err == nil {
-			break
+		return worker.ErrorReason{
+			err,
+			messages.FailureReasonStreamReaderError,
 		}
-
-		log.Printf("failed to determine content type (attempt %d): %s", attempt, err)
 	}
 
-	// .IsText() checks the MIME type of the stream, but we also check file ext here just in case MIME isn't set
-	isText := stream.IsText() ||
-		urlHasFileExtension(urlStr, ".docx", ".doc", ".pdf", ".eml", ".msg", ".txt", ".ppt", ".rtf")
+	if !payload.StreamStartTime.IsZero() {
+		// override stream start time with value from payload
+		stream.StartTime = payload.StreamStartTime
+	}
 
-	return stream.IsImage(), isText, stream.MimeType, err
+	streamJSONBytes, _ := json.Marshal(stream)
+	logger.Println("Stream Info:", string(streamJSONBytes))
+	logger.Println("Mime Type:", stream.MimeType)
+	logger.Println("Format:", stream.FfmpegFormat.String())
+	logger.Println("Start Offset:", stream.StartOffsetMS)
+
+	var mediaMimeType string
+	var segmented bool
+
+	if stream.IsImage() {
+		logger.Println("Stream contents contain an image")
+		mediaMimeType = stream.MimeType
+	} else if stream.IsText() {
+		logger.Println("Stream contents contain a text document")
+		mediaMimeType = stream.MimeType
+	} else if stream.ContainsVideo() {
+		mediaMimeType = videoTDOMimeType
+		segmented = true
+	} else if stream.ContainsAudio() {
+		mediaMimeType = audioTDOMimeType
+		segmented = true
+	} else {
+		return worker.ErrorReason{
+			errUnsupportedStreamType,
+			messages.FailureReasonInvalidData,
+		}
+	}
+
+	// update TDO info
+	if tdo != nil {
+		var alterStartStopTimes bool
+
+		// if the stream is at time offset 0, use the start time as the TDO start/stop time
+		if stream.StartOffsetMS == 0 && !stream.StartTime.IsZero() {
+			logger.Println("Setting TDO start/stop time to:", stream.StartTime.Format(time.RFC3339))
+			tdo.StartDateTime = stream.StartTime
+			tdo.StopDateTime = stream.StartTime
+			alterStartStopTimes = true
+		}
+
+		tdo.Status = api.RecordingStatusRecording
+
+		// set veritone-file metadata on TDO
+		tdo.Details["veritoneFile"] = api.TDOFileDetails{
+			Name:      tdo.Name,
+			MimeType:  mediaMimeType,
+			Segmented: segmented,
+		}
+
+		updatedTDO, err := graphQLClient.UpdateTDO(ctx, *tdo, alterStartStopTimes)
+		if err != nil {
+			return worker.ErrorReason{
+				fmt.Errorf("failed to update TDO: %s", err),
+				messages.FailureReasonAPIError,
+			}
+		}
+
+		tdo.Details = updatedTDO.Details
+		tdoJSON, _ := json.Marshal(tdo)
+		logger.Println("Updated TDO:", string(tdoJSON))
+	}
+
+	errc := make(chan worker.ErrorReason, 4)
+
+	go func() {
+		// listen for an error from stream reader
+		if err := stream.ErrWait(); err != nil {
+			//#TODO check and ignore error in appropriate moment
+			// read/write on closed pipe
+			if strings.Contains(err.Error(), "read/write on closed pipe") {
+				logger.Println("IGNORE stream reder err due to closed pipe..")
+				errc <- worker.ErrorReason{}
+			} else {
+				logger.Println("[1] stream reader err:", err)
+
+				errc <- worker.ErrorReason{
+					fmt.Errorf("[1] stream reader err: %s", err),
+					messages.FailureReasonStreamReaderError,
+				}
+			}
+		}
+	}()
+
+	// transcode stream, if configured
+	if payload.TranscodeFormat != "" {
+		logger.Printf("transcoding stream from [%s] to [%s]", stream.FfmpegFormat.String(), payload.TranscodeFormat)
+
+		var transodeErrC <-chan error
+		stream, transodeErrC = transcodeFn(sctx, stream, payload.TranscodeFormat)
+
+		go func() {
+			if err := <-transodeErrC; err != nil {
+				logger.Println("transcoder err:", err)
+				errc <- worker.ErrorReason{
+					fmt.Errorf("transcoder err: %s", err),
+					messages.FailureReasonOther,
+				}
+			}
+		}()
+
+		err := stream.GuessMimeType()
+		if err != nil && err != streamio.ErrUnknownMimeType {
+			logger.Printf("failed to determine mime type of transcoded stream: %s", err)
+		}
+
+		probeOutput, err := probeFn(ctx, stream)
+		if err != nil {
+			return worker.ErrorReason{
+				fmt.Errorf("failed to probe transcoded stream: %s", err),
+				messages.FailureReasonOther,
+			}
+		}
+
+		stream.Streams = probeOutput.Streams
+		stream.Container = probeOutput.Format
+	}
+	if stream.MimeType == "" {
+		stream.MimeType = mediaMimeType
+	}
+
+	var writeTimeout *time.Timer
+
+	globalTimeout, _ := time.ParseDuration(config.GlobalTimeout)
+	writeTimeout = time.NewTimer(globalTimeout)
+	defer func() {
+		writeTimeout.Stop()
+	}()
+
+	go func() {
+		err := sw.WriteStream(sctx, stream)
+		if err != nil {
+			errc <- worker.ErrorReason{
+				err,
+				messages.FailureReasonFileWriteError,
+			}
+		} else {
+			errc <- worker.ErrorReason{}
+		}
+		writeTimeout.Stop()
+		fmt.Println("Write stream done")
+
+		cancel() // cancel reader (if it hasn't stopped already)
+	}()
+
+	ticker := time.NewTicker(time.Second)
+	var lastProgress int64
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				progress := sw.BytesWritten() + stream.BytesRead()
+				if tracker, ok := sw.(outputTracker); ok {
+					progress += int64(tracker.ObjectsSent())
+				}
+				if progress != lastProgress {
+					lastProgress = progress
+					writeTimeout.Reset(globalTimeout)
+				}
+			case <-writeTimeout.C:
+				// We don't want to return an error and fail the task since so far SI only hang after fully
+				// ingested the stream (see VTN-29645).  So we log a message and return nil so task will succeed.
+				logger.Printf("timeout: stream ingestor has not read/write any new data in %s", config.GlobalTimeout)
+				errc <- worker.ErrorReason{}
+				return
+			}
+		}
+	}()
+
+	errReason := <-errc
+
+	// update TDO status and any modified metadata
+	if tdo != nil {
+		tdo.Status = api.RecordingStatusRecorded
+		if err != nil {
+			tdo.Status = api.RecordingStatusError
+		}
+		if _, err := graphQLClient.UpdateTDO(ctx, *tdo, false); err != nil {
+			logger.Println("failed to update TDO:", err)
+			return worker.ErrorReason{
+				fmt.Errorf("failed to update TDO: %s", err),
+				messages.FailureReasonAPIError,
+			}
+		}
+	}
+
+	return errReason
 }
 
-func writeEmptyStream(ctx context.Context, sw streamio.StreamWriter) error {
-	stream := streamio.NewStream()
-	stream.Close()
-	return sw.WriteStream(ctx, stream)
-}
+func setupTDO(ctx context.Context, payload *enginePayload) (*api.TDO, error) {
+	if createTDOFlag != nil && *createTDOFlag {
+		logger.Println("Creating new TDO...")
+		tdo, err := graphQLClient.CreateTDO(ctx, api.NewTDO(uuid.New().String()), payload.TaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TDO: %s", err)
+		}
 
-type retryableError struct {
-	error
-}
+		logger.Println("Created TDO:", tdo.ID)
+		payload.TDOID = tdo.ID
+		return tdo, nil
+	}
 
-func isErrRetryable(err error) bool {
-	_, ok := err.(retryableError)
-	return ok
-}
+	tdo, err := graphQLClient.FetchTDO(ctx, payload.TDOID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch TDO %q: %s", payload.TDOID, err)
+	}
 
-func retryableErrorf(format string, args ...interface{}) error {
-	return retryableError{fmt.Errorf(format, args...)}
+	if tdo.Details == nil {
+		tdo.Details = make(map[string]interface{})
+	}
+
+	return tdo, nil
 }

@@ -16,7 +16,7 @@ import (
 	"time"
 
 	messages "github.com/veritone/edge-messages"
-	"github.com/veritone/edge-stream-ingestor/streamio"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
@@ -40,7 +40,6 @@ var (
 	httpURLRegexp            = regexp.MustCompile("(?i)^https?:/")
 )
 
-
 // Streamer is the interface that wraps the Stream method
 type Streamer interface {
 	Stream(ctx context.Context, dur time.Duration) *streamio.Stream
@@ -59,8 +58,6 @@ type adaptor struct {
 	httpClient  *http.Client
 	kafkaClient messaging.Client
 }
-
-
 
 func NewAdaptor(payloadJSON string,
 	engineInstanceId string,
@@ -129,7 +126,6 @@ func NewAdaptor(payloadJSON string,
 	}, nil
 }
 
-
 func (a *adaptor) Run() (errReason worker.ErrorReason) {
 	method := fmt.Sprintf("[Adaptor.Run:%s,%s,%s]", a.workItem.EngineId, a.engineInstanceId, a.workItem.TaskId)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -157,10 +153,10 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 	// have to find the output
 	outputScfsArr, err := scfsio.GetIOForWorkItem(a.workItem, "output")
 	if err != nil {
-		return worker.ErrorReason{ errors.Wrapf(err, "%s failed to get OutputIO", method), messages.FailureReasonInternalError }
+		return worker.ErrorReason{errors.Wrapf(err, "%s failed to get OutputIO", method), messages.FailureReasonInternalError}
 	}
 	// for now, we're going to just assume 1 output???
-	scfsStreamWriter := NewSCFSIOWriter(outputScfsArr[0].String(), outputScfsArr[0].ScfsIO, a.payload.ChunkSize)
+	scfsStreamWriter := scfsio.NewSCFSIOWriter(outputScfsArr[0].String(), outputScfsArr[0].ScfsIO, a.payload.ChunkSize)
 	if err != nil {
 		return worker.ErrorReason{
 			errors.Wrap(err, "Error received when getting scfsStreamWriter"),
@@ -225,7 +221,7 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 			}
 		}
 
-		sw, err = NewTeeStreamWriter(s3StreamWriter, scfsStreamWriter)
+		sw, err = scfsio.NewTeeStreamWriter(s3StreamWriter, scfsStreamWriter)
 		if err != nil {
 			return worker.ErrorReason{
 				errors.Wrap(err, "Failed to get TeeStreamWriter"),
@@ -250,7 +246,7 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 		}
 
 		log.Println("Sending final heartbeat. Status:", string(status))
-		if err := hb.sendHeartbeat(ctx, status, &worker.ErrorReason{Err:err, FailureReason:messages.FailureReasonOther}); err != nil {
+		if err := hb.sendHeartbeat(ctx, status, &worker.ErrorReason{Err: err, FailureReason: messages.FailureReasonOther}); err != nil {
 			log.Println("Failed to send final heartbeat:", err)
 		}
 	}()
@@ -268,7 +264,7 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 			coreAPIClient, err := api.NewCoreAPIClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
 				return worker.ErrorReason{
-					errors.Wrap(err,"failed to initialize core API client"),
+					errors.Wrap(err, "failed to initialize core API client"),
 					messages.FailureReasonAPIError,
 				}
 			}
@@ -312,7 +308,7 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 		if strings.Contains(url, "veritone") && strings.Contains(url, "/media-streamer/stream") {
 			a.httpClient, err = api.NewAuthenticatedHTTPClient(a.config.VeritoneAPI, a.apiToken)
 			if err != nil {
-				return worker.ErrorReason {
+				return worker.ErrorReason{
 					errors.Wrap(err, "Getting AuthenticatedHTTPClient"),
 					messages.FailureReasonOther,
 				}
