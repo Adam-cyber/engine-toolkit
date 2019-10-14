@@ -64,7 +64,7 @@ func NewCoreAPIClient(config Config, token string) (CoreAPIClient, error) {
 		graphql.WithBeforeRetryHandler(beforeRetryHandler))
 
 	if config.Debug {
-		baseClient.SetLogger( func(s string) { log.Println(s) } )
+		baseClient.SetLogger(func(s string) { log.Println(s) })
 	}
 
 	return &graphQLClient{Client: baseClient}, nil

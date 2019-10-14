@@ -67,7 +67,7 @@ func run(ctx context.Context) error {
 		// got to do what we got to do .. contact mother ship
 		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, EngineToolkitVersion, BuildTime, BuildTag)
 		if err != nil {
-			eng.logDebug("WARNING: Skip getting work from controlle due to error receiving when attempting to register with the controller.  Err=%v", err)
+			eng.logDebug("WARNING: Skip getting work from controller due to error receiving when attempting to register with the controller.  Err=%v", err)
 		} else {
 			skipKafka = true
 			// check on the producing side

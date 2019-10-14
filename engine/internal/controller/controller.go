@@ -14,15 +14,17 @@ import (
 func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion, etBuildTime, etBuildTag string) (*ControllerUniverse, error) {
 	engineToolkitBuildLabel := fmt.Sprintf("Veritone Engine Toolkit:%s-%s,%s", etVersion, etBuildTag, etBuildTime)
 	hostID := getEnvOrGenGuid("HOST_ID", "", false)
+
 	cfg := controllerClient.Configuration{
 		BasePath:      controllerConfig.ControllerUrl,
 		DefaultHeader: make(map[string]string),
 		UserAgent:     engineToolkitBuildLabel,
+		// TODO bring your own httpClient to set your own timeout:	HTTPClient: xxxx
 	}
 	controllerApiClient := controllerClient.NewAPIClient(&cfg)
-	correlationId := fmt.Sprintf("ETREG_FROM_HOST_ID:%s", hostID)
 	containerStatus := controllerClient.ContainerStatus{}
 	containerStatus.ContainerId, containerStatus.LaunchTimestamp = getInitialContainerStatus()
+	correlationId := fmt.Sprintf("EngineToolkit_Host:%s,ContainerId:%s", hostID, containerStatus.ContainerId)
 	engineInstanceInfo := controllerClient.EngineInstanceInfo{
 		LaunchId:                 getEnvOrGenGuid("LAUNCH_ID", "", false),
 		EngineId:                 getEnvOrGenGuid("ENGINE_ID", "", true),
@@ -53,6 +55,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 			universeStartTime:              time.Now().Unix(),
 			controllerConfig:               controllerConfig,
 			controllerAPIClient:            controllerApiClient,
+			engineInstanceId:               engineInstanceRegistrationInfo.EngineInstanceId,
 			correlationId:                  fmt.Sprintf("ET:%s", engineInstanceRegistrationInfo.EngineInstanceId),
 			engineInstanceInfo:             engineInstanceInfo,
 			engineInstanceRegistrationInfo: engineInstanceRegistrationInfo,

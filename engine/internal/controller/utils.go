@@ -2,8 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -87,8 +90,21 @@ cat /proc/self/cgroup
 the rest -- just fab
 */
 func getInitialContainerStatus() (containerId string, timestamp int64) {
-	containerId = "dockerid:" + GenerateUuid()
 	timestamp = time.Now().Unix()
+	containerId = "dockerid:" + GenerateUuid()
+	cmd := exec.Command("cat", "/proc/self/cgroup")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		ss := strings.Split(string(out), "\n")
+		if len(ss) > 0 {
+			// look for /docker
+			keyword := "/docker/"
+			if dockerStart := strings.Index(ss[0], keyword); dockerStart >= 0 {
+				startAt := dockerStart + len(keyword)
+				containerId = ss[0][startAt : startAt+16]
+			}
+		}
+	}
 	return
 }
 
