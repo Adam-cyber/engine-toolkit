@@ -63,3 +63,15 @@ build-tv-and-radio-adapter-docker: #build-base-docker
             --build-arg gitbranch=$(gitbranch) \
             --build-arg githash=$(githash) \
             .
+
+
+build-si-v2: #build-base-docker
+	cd internal/controller/stream-ingestor-v2; docker build -t stream-ingestor-v2 \
+            --build-arg MANIFEST_JSON=manifest.json \
+            --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
