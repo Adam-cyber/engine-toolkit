@@ -1,14 +1,4 @@
-FROM golang:1.12.5-alpine3.9 AS builder
-
-ARG GITHUB_ACCESS_TOKEN
-ADD . /go/src/github.com/veritone/edge-stream-ingestor
-
-RUN apk update && \
-    apk add -U build-base git curl mailcap ffmpeg && \
-    cd /go/src/github.com/veritone/edge-stream-ingestor && \
-    git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/" && \
-    go env && go list all | grep cover && \
-    GOPATH=/go make
+FROM engine-toolkit:base as builder
 
 FROM jrottenberg/ffmpeg:4.1-ubuntu
 
@@ -18,6 +8,13 @@ ARG AWS_ACCESS_KEY_ID
 ARG AWS_SECRET_ACCESS_KEY
 ARG AWS_DEFAULT_REGION=us-east-1
 
+ARG MANIFEST_JSON=manifest.json
+ARG ENGINE_ID=352556c7-de07-4d55-b33f-74b1cf237f25
+ARG gitbranch
+ARG githash
+ARG release
+ARG builddate
+
 RUN apt-get update \
     && apt-get install -y ca-certificates mime-support \
     && rm -rf /var/lib/apt/lists
@@ -25,14 +22,15 @@ RUN apt-get update \
 RUN mkdir -p /app/data
 WORKDIR /app
 
-COPY --from=builder /go/src/github.com/veritone/edge-stream-ingestor/edge-stream-ingestor ./edge-stream-ingestor
-ADD ${DEFAULT_PAYLOAD_FILE} payload.json
-ADD ${CONFIG_FILE} config.json
-COPY --from=builder /go/src/github.com/veritone/edge-stream-ingestor/manifest.json.generated /var/manifest.json
+COPY --from=builder /app/engine /app/
+ENV RELEASE_NOTES="etversion=${release};builddate=${builddate};branch=${gitbranch};commit=${githash}"
+ADD ${MANIFEST_JSON} /var/manifest.json
+RUN sed -i "s#RELEASE_NOTES#$RELEASE_NOTES#g" /var/manifest.json
 
-ENV CONFIG_FILE="/app/config.json"
+ENV ENGINE_ID=${ENGINE_ID}
+
 ENV AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
 ENV AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 ENV AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION
 
-ENTRYPOINT ["/app/edge-stream-ingestor"]
+ENTRYPOINT ["/app/engine"]

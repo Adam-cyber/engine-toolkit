@@ -9,5 +9,6 @@
 	"clusterSize": "custom",
 	"customProfile": "stream-ingestor",
 	"initialConcurrency": 50,
-	"maxConcurrency": 50
+	"maxConcurrency": 50,
+        "releaseNotes": "RELEASE_NOTES"
 }

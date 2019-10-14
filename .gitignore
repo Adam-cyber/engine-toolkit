@@ -25,3 +25,4 @@ engine/examples/exif/testdata/fs-engine*
 engine/examples/toupppercase/testdata/fs-engine*
 engine/examples/toupppercase/dist
 vendor/
+.swp
