@@ -38,15 +38,18 @@ test:
 	GO111MODULE=on go test -v ./...
 
 
-# ---------------- BUILDING DOCKER IMAGES FOR BASE ADAPTERS
+# ------------------- BUILDING DOCKER IMAGES FOR BASE ADAPTERS
 
 BASE_IMAGE = engine-toolkit:base
+WSA_IMAGE = webstream-adapter
+TVR_IMAGE = tv-and-radio-adapter
+SI_IMAGE = stream-ingestor-v2
 
 build-base-docker:
 	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
 
 build-webstream-adapter-docker: # build-base-docker
-	cd internal/controller/adapter; docker build -t webstream-adapter --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
+	cd internal/controller/adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
             --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
             --build-arg release=$(release) \
             --build-arg builddate=$(builddate) \
@@ -55,7 +58,7 @@ build-webstream-adapter-docker: # build-base-docker
            .
 
 build-tv-and-radio-adapter-docker: #build-base-docker
-	cd internal/controller/adapter; docker build -t tv-and-radio-adapter \
+	cd internal/controller/adapter; docker build -t $(TVR_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
             --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
             --build-arg release=$(release) \
@@ -66,7 +69,7 @@ build-tv-and-radio-adapter-docker: #build-base-docker
 
 
 build-si-v2: #build-base-docker
-	cd internal/controller/stream-ingestor-v2; docker build -t stream-ingestor-v2 \
+	cd internal/controller/stream-ingestor-v2; docker build -t $(SI_IMAGE) \
             --build-arg MANIFEST_JSON=manifest.json \
             --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
             --build-arg release=$(release) \
@@ -83,8 +86,32 @@ stop-kafka:
 
 
 CURPWD:=$(shell pwd)
+ENVFILE:=controller-env.txt
+
 run-tv:
-	docker run -it --network host --rm --entrypoint=sh --env-file tvenv.txt \
+	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
 		-v ${CURPWD}:/src \
 		-v /tmp/cache:/cache \
-		-v /tmp/test:/tmp/test tv-and-radio-adapter:latest
+		-v /tmp/test:/tmp/test $(TVR_IMAGE)
+
+run-webstream:
+	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp/test:/tmp/test  $(WSA_IMAGE)
+
+run-si:
+	docker run -it --network host --rm --entrypoint=sh --env-file controller-env.txt \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp/test:/tmp/test $(SI_IMAGE)
+
+
+
+## use this to make a new engine executable without having to build docker again
+# Then in the target container such as tv, etc. just do
+#   cp /src/release/bin/engine /app
+#
+run-base:
+	docker run -it --rm -v ${CURPWD}:/go/src/github.com/veritone/engine-toolkit/engine $(BASE_IMAGE)
+
