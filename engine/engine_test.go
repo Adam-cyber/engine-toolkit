@@ -224,13 +224,87 @@ func TestProcessingChunkError(t *testing.T) {
 	is.Equal(outputMsg.Topic, engine.Config.Kafka.ChunkTopic) // chunk topic
 	err = json.Unmarshal(outputMsg.Value, &chunkResult)
 	is.NoErr(err)
-	is.Equal(chunkResult.ErrorMsg, "500: Something went wrong")
+	is.Equal(chunkResult.ErrorMsg, "Something went wrong")
 	is.Equal(chunkResult.Type, messageTypeChunkResult)
 	is.Equal(chunkResult.TaskID, inputMessage.TaskID)
 	is.Equal(chunkResult.ChunkUUID, inputMessage.ChunkUUID)
 	is.Equal(chunkResult.Status, chunkStatusError)
 	is.Equal(chunkResult.FailureReason, "internal_error")
-	is.Equal(chunkResult.FailureMsg, "500: Something went wrong")
+	is.Equal(chunkResult.FailureMsg, "Something went wrong")
+	is.True(chunkResult.EngineOutput == nil)
+}
+
+// TestProcessingChunkExternalError tests the entire end to end flow of processing
+// a chunk simulating an error from the Process webhook.
+func TestProcessingChunkExternalError(t *testing.T) {
+	is := is.New(t)
+
+	engine := NewEngine()
+	engine.Config.Subprocess.Arguments = []string{} // no subprocess
+	engine.Config.Kafka.ChunkTopic = "chunk-topic"
+	engine.Config.Webhooks.Backoff.MaxRetries = 1
+	engine.logDebug = func(args ...interface{}) {
+	}
+	inputPipe := newPipe()
+	defer inputPipe.Close()
+	outputPipe := newPipe()
+	defer outputPipe.Close()
+	engine.consumer = inputPipe
+	engine.producer = outputPipe
+	readySrv := newOKServer()
+	defer readySrv.Close()
+	engine.Config.Webhooks.Ready.URL = readySrv.URL
+	processSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"errorType":"external_error", "errorMsg":"External Service Error"}`, http.StatusInternalServerError)
+	}))
+	defer processSrv.Close()
+	engine.Config.Webhooks.Process.URL = processSrv.URL
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		err := engine.Run(ctx)
+		is.NoErr(err)
+	}()
+	inputMessage := mediaChunkMessage{
+		TimestampUTC:  time.Now().Unix(),
+		ChunkUUID:     "123",
+		Type:          messageTypeMediaChunk,
+		StartOffsetMS: 1000,
+		EndOffsetMS:   2000,
+		JobID:         "job1",
+		TDOID:         "tdo1",
+		TaskID:        "task1",
+	}
+	_, _, err := inputPipe.SendMessage(&sarama.ProducerMessage{
+		Offset: 1,
+		Key:    sarama.StringEncoder(inputMessage.TaskID),
+		Value:  newJSONEncoder(inputMessage),
+	})
+	is.NoErr(err)
+
+	var outputMsg *sarama.ConsumerMessage
+	var chunkResult chunkResult
+
+	// read the chunk success message
+	select {
+	case outputMsg = <-outputPipe.Messages():
+	case <-time.After(1 * time.Second):
+		is.Fail() // timed out
+		return
+	}
+	is.Equal(string(outputMsg.Key), inputMessage.TaskID)      // output message key must be TaskID
+	is.Equal(outputMsg.Topic, engine.Config.Kafka.ChunkTopic) // chunk topic
+	err = json.Unmarshal(outputMsg.Value, &chunkResult)
+	is.NoErr(err)
+	is.Equal(chunkResult.ErrorMsg, "External Service Error")
+	is.Equal(chunkResult.Type, messageTypeChunkResult)
+	is.Equal(chunkResult.TaskID, inputMessage.TaskID)
+	is.Equal(chunkResult.ChunkUUID, inputMessage.ChunkUUID)
+	is.Equal(chunkResult.Status, chunkStatusError)
+	is.Equal(chunkResult.FailureReason, "external_error")
+	is.Equal(chunkResult.FailureMsg, "External Service Error")
 	is.True(chunkResult.EngineOutput == nil)
 }
 

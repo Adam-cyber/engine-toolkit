@@ -47,6 +47,12 @@ type Engine struct {
 	processingDuration     time.Duration
 }
 
+// EngineError ..
+type EngineError struct {
+	ErrorType string
+	ErrorMsg  string
+}
+
 // NewEngine makes a new Engine with the specified Consumer and Producer.
 func NewEngine() *Engine {
 	return &Engine{
@@ -415,7 +421,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 			return nil
 		}
 		if resp.StatusCode != http.StatusOK {
-			return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
+			return errors.Errorf("%s", strings.TrimSpace(buf.String()))
 		}
 		if buf.Len() == 0 {
 			ignoreChunk = true
@@ -424,13 +430,29 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		content = buf.String()
 		return nil
 	})
+
 	if err != nil {
-		// send error message
+		var engineError EngineError
+
+		er := json.Unmarshal([]byte(err.Error()), &engineError)
 		finalUpdateMessage.Status = chunkStatusError
-		finalUpdateMessage.ErrorMsg = err.Error()
-		finalUpdateMessage.FailureReason = "internal_error"
+
+		if er != nil {
+			// send error message
+			finalUpdateMessage.ErrorMsg = err.Error()
+			finalUpdateMessage.FailureReason = "internal_error"
+			finalUpdateMessage.FailureMsg = finalUpdateMessage.ErrorMsg
+			return err
+		}
+
+		e.logDebug("engineError: ", engineError)
+
+		// send error message
+		finalUpdateMessage.ErrorMsg = engineError.ErrorMsg
+		finalUpdateMessage.FailureReason = engineError.ErrorType
 		finalUpdateMessage.FailureMsg = finalUpdateMessage.ErrorMsg
-		return err
+		return errors.Errorf(engineError.ErrorMsg)
+
 	}
 	if ignoreChunk {
 		finalUpdateMessage.Status = chunkStatusIgnored
