@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 	"sync"
+	"log"
 )
 
 /**
@@ -74,13 +75,17 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	go e.controller.UpdateEngineInstanceStatus(ctx, &wg)
 	// simple loop to get the work
 	var waitElapsedInSeconds int32
+
 	wg.Add(1)
+	ttlTimer := time.NewTimer(time.Duration(e.controller.GetTTL()) * time.Second)
+
 	go func() {
 		defer wg.Done()
 		for {
 			select {
-			case <-time.After(time.Duration(e.controller.GetTTL()) * time.Second):
-				e.logDebug(fmt.Sprintf("Time is up (TTL is %s) -- GETTING OUT", e.controller.GetTTL()))
+			case <-ttlTimer.C:
+				log.Printf("Time is up (TTL is %d) -- GETTING OUT", e.controller.GetTTL())
+				cancel()
 				return
 			case <-ctx.Done():
 				return
@@ -123,7 +128,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	<-ctx.Done()
 
 	// one more ... tell Controller that we're terminated
-	e.controller.Terminate(ctx)
+	e.controller.Terminate()
 	return nil
 }
 

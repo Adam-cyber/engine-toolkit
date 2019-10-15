@@ -79,7 +79,6 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 	log.Printf("%s got action=%s", method, res.Action)
 	switch res.Action {
 	case workRequestActionTerminate:
-		c.Terminate(ctx)
 		// bye bye
 		return true, false, 0, nil // TODO also put some thing into some channel to say that we're done?
 	case workRequestActionWait:
@@ -124,14 +123,14 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 	return false, false, len(c.curWorkItemsInABatch), nil
 }
 
-func (c *ControllerUniverse) Terminate(ctx context.Context) {
-	c.controllerAPIClient.EngineApi.TerminateEngineInstance(
-		context.WithValue(ctx, controllerClient.ContextAccessToken,
+func (c *ControllerUniverse) Terminate() {
+	_, err:=c.controllerAPIClient.EngineApi.TerminateEngineInstance(
+		context.WithValue(context.Background(), controllerClient.ContextAccessToken,
 			c.engineInstanceRegistrationInfo.EngineInstanceToken),
 		c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts{
 			XCorrelationId: optional.NewInterface(c.correlationId),
 		})
-	log.Printf("[ControllerUniverse.Terminate:%s] TERMINATED", c.engineInstanceId)
+	log.Printf("[ControllerUniverse.Terminate:%s] TERMINATED, err=%v", c.engineInstanceId, err)
 }
 func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.batchLock.Lock()

@@ -70,6 +70,7 @@ func (c *ControllerUniverse) GetTTL() int32 {
 	if c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds == 0 {
 		c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds = c.controllerConfig.ProcessingTTLInSeconds
 	}
+	log.Printf("........... LOOK HERE (REMOVE ME LATER TOO) ...... TTL=%d seconds", c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds)
 	return c.engineInstanceRegistrationInfo.RuntimeExpirationSeconds
 }
 
