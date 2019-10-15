@@ -75,3 +75,16 @@ build-si-v2: #build-base-docker
             --build-arg githash=$(githash) \
             .
 
+start-kafka:
+	docker-compose up -d
+
+stop-kafka:
+	docker-compose down
+
+
+CURPWD:=$(shell pwd)
+run-tv:
+	docker run -it --network host --rm --entrypoint=sh --env-file tvenv.txt \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp/test:/tmp/test tv-and-radio-adapter:latest

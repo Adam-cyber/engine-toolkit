@@ -17,11 +17,14 @@ const defaultHeartbeatInterval = "5s"
 const defaultChunkSize = 512 * 1024 //512K
 
 var (
+	/* TODO REMOVEME
 	payloadFlag = flag.String("payload", "", "payload file")
 	configFlag  = flag.String("config", "", "config file")
+
 	tdoIDFlag   = flag.String("tdo", "", "Temporal data object ID (override payload)")
 	urlFlag     = flag.String("url", "", "Override URL to ingest")
 	stdoutFlag  = flag.Bool("stdout", false, "Write stream to stdout instead of Kafka")
+		*/
 )
 
 func init() {
@@ -53,11 +56,11 @@ func (c *engineConfig) validate() error {
 	if _, err := time.ParseDuration(c.HeartbeatInterval); err != nil {
 		return fmt.Errorf(`invalid value for "heartbeatInterval": "%s" - %s`, c.HeartbeatInterval, err)
 	}
-
+	/* TODO REMOVEME
 	if (stdoutFlag == nil || !*stdoutFlag) && c.OutputTopicName == "" && c.OutputBucketName == "" {
 		return errors.New("an output topic or bucket name is required")
 	}
-
+	*/
 	return nil
 }
 
@@ -111,12 +114,13 @@ func (p enginePayload) String() string {
 }
 
 func (p *enginePayload) defaults() {
+	/*
 	if tdoIDFlag != nil && *tdoIDFlag != "" {
 		p.TDOID = *tdoIDFlag
 	}
 	if urlFlag != nil && *urlFlag != "" {
 		p.URL = *urlFlag
-	}
+	}*/
 	if p.ChunkSize == 0 {
 		p.ChunkSize = defaultChunkSize
 	}

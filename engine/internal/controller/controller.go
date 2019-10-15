@@ -13,7 +13,6 @@ import (
 
 func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion, etBuildTime, etBuildTag string) (*ControllerUniverse, error) {
 	engineToolkitBuildLabel := fmt.Sprintf("Veritone Engine Toolkit:%s-%s,%s", etVersion, etBuildTag, etBuildTime)
-	hostID := getEnvOrGenGuid("HOST_ID", "", false)
 
 	cfg := controllerClient.Configuration{
 		BasePath:      controllerConfig.ControllerUrl,
@@ -24,13 +23,13 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 	controllerApiClient := controllerClient.NewAPIClient(&cfg)
 	containerStatus := controllerClient.ContainerStatus{}
 	containerStatus.ContainerId, containerStatus.LaunchTimestamp = getInitialContainerStatus()
-	correlationId := fmt.Sprintf("EngineToolkit_Host:%s,ContainerId:%s", hostID, containerStatus.ContainerId)
+	correlationId := fmt.Sprintf("EngineToolkit_Host:%s,ContainerId:%s", controllerConfig.HostId, containerStatus.ContainerId)
 	engineInstanceInfo := controllerClient.EngineInstanceInfo{
 		LaunchId:                 getEnvOrGenGuid("LAUNCH_ID", "", false),
 		EngineId:                 getEnvOrGenGuid("ENGINE_ID", "", true),
 		BuildLabel:               engineToolkitBuildLabel,
 		EngineToolkitVersion:     etVersion,
-		HostId:                   hostID,
+		HostId:                   controllerConfig.HostId,
 		StartupTimestamp:         time.Now().Unix(),
 		DockerContainerID:        containerStatus.ContainerId,
 		RuntimeExpirationSeconds: controllerConfig.ProcessingTTLInSeconds,
@@ -39,7 +38,6 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 		LaunchStatus:             "active",
 		LaunchStatusInfo:         "OK",
 	}
-
 	headerOpts := &controllerClient.RegisterEngineInstanceOpts{
 		XCorrelationId: optional.NewInterface(correlationId)}
 

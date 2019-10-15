@@ -25,7 +25,7 @@ const (
 	defaultGlobalTimeout          = "30m"
 	defaultFirstReadTimeout       = "10m"
 )
-
+/* TODO REMOVEME
 var (
 	payloadFlag       = flag.String("payload", "", "payload file")
 	configFlag        = flag.String("config", "", "config file")
@@ -40,6 +40,7 @@ var (
 	transcodeFlag     = flag.String("transcode", "", "FFMPEG format to transcode output stream to")
 	rawAssetFlag      = flag.Bool("save-raw", false, "Save raw stream as primary asset")
 )
+*/
 
 func init() {
 	flag.Parse()
@@ -174,6 +175,7 @@ func (p enginePayload) String() string {
 }
 
 func (p *enginePayload) defaults() {
+	/* TODO REMOVEME
 	if tdoIDFlag != nil && *tdoIDFlag != "" {
 		p.TDOID = *tdoIDFlag
 	}
@@ -186,21 +188,25 @@ func (p *enginePayload) defaults() {
 	if rawAssetFlag != nil && *rawAssetFlag {
 		*p.SaveRawAsset = true
 	}
+	*/
 }
 
 func (p *enginePayload) validate() error {
+	/*
 	if !*createTDOFlag && p.TDOID == "" {
 		return errors.New("Missing tdoId from payload")
 	}
+	*/
 	if p.JobID == "" {
 		return errors.New("Missing jobId from payload")
 	}
 	if p.TaskID == "" {
 		return errors.New("Missing taskId from payload")
 	}
+	/* TODO REMOVEME
 	if !*stdinFlag && p.URL == "" && os.Getenv("STREAM_INPUT_TOPIC") == "" {
 		return errors.New("either a stream input topic or URL is required")
-	}
+	}*/
 
 	if p.OutputChunkDuration != "" {
 		if _, err := time.ParseDuration(p.OutputChunkDuration); err != nil {

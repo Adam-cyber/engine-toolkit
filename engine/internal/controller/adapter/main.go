@@ -166,10 +166,13 @@ func (a *adaptor) Run() (errReason worker.ErrorReason) {
 
 	sw = scfsStreamWriter
 
+	/* TODO REMOVEME
 	if *stdoutFlag {
 		// stdout stream writer
 		sw = streamio.NewFileStreamWriter(os.Stdout)
-	} else if a.payload.isOfflineMode() && !a.payload.DisableS3 {
+	} else
+	*/
+	if a.payload.isOfflineMode() && !a.payload.DisableS3 {
 		// when payload "CacheToS3Key" is available, webstream adapter is in "offline ingestion" mode
 		cacheCfg := streamio.S3CacheConfig{
 			Bucket:      a.config.OutputBucketName,

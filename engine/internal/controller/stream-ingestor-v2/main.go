@@ -23,7 +23,7 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 
 	"encoding/json"
-	"github.com/google/uuid"
+//	"github.com/google/uuid"
 )
 
 const (
@@ -523,6 +523,7 @@ func ingestStream(ctx context.Context, payload *enginePayload, sr streamio.Strea
 }
 
 func setupTDO(ctx context.Context, payload *enginePayload) (*api.TDO, error) {
+	/*
 	if createTDOFlag != nil && *createTDOFlag {
 		logger.Println("Creating new TDO...")
 		tdo, err := graphQLClient.CreateTDO(ctx, api.NewTDO(uuid.New().String()), payload.TaskID)
@@ -534,7 +535,7 @@ func setupTDO(ctx context.Context, payload *enginePayload) (*api.TDO, error) {
 		payload.TDOID = tdo.ID
 		return tdo, nil
 	}
-
+	*/
 	tdo, err := graphQLClient.FetchTDO(ctx, payload.TDOID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch TDO %q: %s", payload.TDOID, err)

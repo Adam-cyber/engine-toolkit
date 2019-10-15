@@ -133,7 +133,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	processedCount := 0
-	e.controller.SetWorkRequestStatus("same", "running", fmt.Sprintf("New batch %d items", batchSize) )
+	e.controller.SetWorkRequestStatus("same", "running", fmt.Sprintf("New batch %d items", batchSize))
 
 	for {
 		select {
@@ -145,7 +145,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 			processedCount++ //move on to the next one..
 			if processedCount == batchSize {
 				// done
-				e.controller.SetWorkRequestStatus("same", "complete", fmt.Sprintf ("completed %d items", batchSize))
+				e.controller.SetWorkRequestStatus("same", "complete", fmt.Sprintf("completed %d items", batchSize))
 				return
 			}
 		}

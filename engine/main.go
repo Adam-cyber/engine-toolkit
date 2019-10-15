@@ -19,6 +19,8 @@ var EngineToolkitVersion string
 
 func main() {
 	fmt.Printf("Veritone Engine Toolkit %s-%s, built on %s\n", EngineToolkitVersion, BuildTag, BuildTime)
+	// test run
+
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	c := make(chan os.Signal, 1)
@@ -44,6 +46,7 @@ func main() {
 func run(ctx context.Context) error {
 	eng := NewEngine()
 	eng.logDebug("engine: running")
+	eng.logDebug("Sample config: %s", controller.SampleVeritoneControllerConfig())
 	defer eng.logDebug("engine: stopped")
 	skipKafka := false
 
@@ -67,7 +70,7 @@ func run(ctx context.Context) error {
 		// got to do what we got to do .. contact mother ship
 		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, EngineToolkitVersion, BuildTime, BuildTag)
 		if err != nil {
-			eng.logDebug("WARNING: Skip getting work from controller due to error receiving when attempting to register with the controller.  Err=%v", err)
+			eng.logDebug("WARNING: Skip getting work from controller due to error receiving when attempting to register with the controller.  Err=", err)
 		} else {
 			skipKafka = true
 			// check on the producing side

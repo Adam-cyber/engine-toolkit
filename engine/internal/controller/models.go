@@ -4,6 +4,7 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"sync"
 	"time"
+	"os"
 )
 
 const (
@@ -82,6 +83,24 @@ type VeritoneControllerConfig struct {
 	GraphQLTimeoutDuration string `json:"graphqlTimeoutDuration"`
 }
 
+func (c *VeritoneControllerConfig) String() string {
+	return ToString(c)
+}
+func SampleVeritoneControllerConfig () string {
+	sampleConfig:=VeritoneControllerConfig{
+		ControllerMode: true,
+		ControllerUrl : "http://localhost:9000/edge/v1",
+		HostId: GenerateUuid(),
+		Token:GenerateUuid(),
+		UpdateStatusInterval:"5s",
+		ManagedEngines:[]ManagedEngineInfo{ {EngineId:engineIdSI2,}, {EngineId:engineIdWSA,}, {EngineId:engineIdTVRA,}},
+		ProcessingTTLInSeconds: 6000,
+		LicenseExpirationInSeconds: 100000,
+		IdleQueryIntervalInSeconds: 5,
+		IdleWaitTimeoutInSeconds: 60,
+	}
+	return sampleConfig.String()
+}
 func (c *VeritoneControllerConfig) SetDefaults() {
 	c.ControllerMode = true
 	if c.UpdateStatusInterval == "" {
@@ -102,6 +121,9 @@ func (c *VeritoneControllerConfig) SetDefaults() {
 	}
 	if c.GraphQLTimeoutDuration == "" {
 		c.GraphQLTimeoutDuration = "60s"
+	}
+	if c.HostId == "" {
+		c.HostId = os.Getenv("HOST_ID")
 	}
 }
 
