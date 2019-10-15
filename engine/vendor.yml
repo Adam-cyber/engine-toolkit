@@ -96,7 +96,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
 - path: github.com/veritone/realtime
-  rev: 596656dbff6bd772a30b7180b1cf1114a374db3d
+  rev: 2301eff34dca9f9428c1a3aa7ed80139d4ab53a2
 - path: go.uber.org/atomic
   rev: ef0d20d85b01f4708a8085bca571838bf59a3f77
 - path: go.uber.org/multierr

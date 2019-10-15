@@ -11,6 +11,7 @@ const (
 	engineIdSI2  = "352556c7-de07-4d55-b33f-74b1cf237f25"
 	engineIdWSA  = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
+	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
 
 	hostActionTerminate = "terminate"
 	hostActionRunning   = "running"
@@ -93,7 +94,7 @@ func SampleVeritoneControllerConfig () string {
 		HostId: GenerateUuid(),
 		Token:GenerateUuid(),
 		UpdateStatusInterval:"5s",
-		ManagedEngines:[]ManagedEngineInfo{ {EngineId:engineIdSI2,}, {EngineId:engineIdWSA,}, {EngineId:engineIdTVRA,}},
+		ManagedEngines:[]ManagedEngineInfo{ {EngineId:engineIdSI2,}, {EngineId:engineIdWSA,}, {EngineId:engineIdTVRA,}, {EngineId:engineIdOW,}},
 		ProcessingTTLInSeconds: 6000,
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,

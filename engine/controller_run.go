@@ -70,12 +70,12 @@ func (e *Engine) runViaController(ctx context.Context) error {
 		}
 	}
 	var wg sync.WaitGroup
-
+	wg.Add(1)
 	go e.controller.UpdateEngineInstanceStatus(ctx, &wg)
 	// simple loop to get the work
 	var waitElapsedInSeconds int32
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		for {
 			select {

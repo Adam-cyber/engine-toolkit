@@ -122,5 +122,6 @@ func discoverEngines() []string {
 	res = append(res, engineIdTVRA)
 	res = append(res, engineIdWSA)
 	res = append(res, engineIdSI2)
+	res = append(res, engineIdOW)
 	return res
 }

@@ -2,15 +2,14 @@ package controller
 
 import (
 	"context"
-	"github.com/antihax/optional"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
-	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	"fmt"
 	"log"
 	"time"
-
-	"fmt"
+	"github.com/antihax/optional"
+	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	"github.com/veritone/realtime/modules/controller/worker"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
 )
 
 /**
@@ -172,54 +171,45 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	}
 
 	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
+	var wrk  worker.Worker
 	switch curWorkItem.EngineId {
 	case engineIdTVRA:
 		fallthrough
 	case engineIdWSA:
-		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
+		wrk, err = adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
 			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
-		var errReason worker.ErrorReason
-		if err == nil {
-			errReason = adapter.Run()
-		}
-		if errReason.Err != nil {
-			// print stuff
-			log.Printf("%s, Failed to run, err=%v", method, err)
-			// Set TaskStatus accordingly.
-			// Status would be failed -- possible for stream engines since they are in control of
-			// the entire processing for the task
-			c.batchLock.Lock()
-			curStatus.FailureReason = string(errReason.FailureReason)
-			curStatus.ErrorCount++
-			curStatus.TaskStatus = "failed"
-			c.batchLock.Unlock()
-		}
 
 	case engineIdSI2:
-		si, err := siv2.NewStreamIngestor(payloadJSON, c.engineInstanceId,
+		wrk, err = siv2.NewStreamIngestor(payloadJSON, c.engineInstanceId,
 			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
-		var errReason worker.ErrorReason
-		if err == nil {
-			errReason = si.Run()
-		}
-		if errReason.Err != nil {
-			// print stuff
-			log.Printf("%s, Failed to run, err=%v", method, err)
-			c.batchLock.Lock()
-			curStatus.FailureReason = string(errReason.FailureReason)
-			curStatus.ErrorCount++
-			if getInputMode(curWorkItem) != "chunk" {
-				curStatus.TaskStatus = "failed"
-			}
-			c.batchLock.Unlock()
-		}
+
+	case engineIdOW:
 
 	default:
 		panic("TO BE IMPLEMENTED")
+	}
+
+	var errReason worker.ErrorReason
+	if err == nil {
+		errReason = wrk.Run()
+	}
+	if errReason.Err != nil {
+		// print stuff
+		log.Printf("%s, Failed to run, err=%v", method, err)
+		// Set TaskStatus accordingly.
+		// Status would be failed -- possible for stream engines since they are in control of
+		// the entire processing for the task
+		c.batchLock.Lock()
+		curStatus.FailureReason = string(errReason.FailureReason)
+		curStatus.ErrorCount++
+		if getInputMode(curWorkItem) != "chunk" {
+			curStatus.TaskStatus = "failed"
+		}
+		c.batchLock.Unlock()
 	}
 }
 
