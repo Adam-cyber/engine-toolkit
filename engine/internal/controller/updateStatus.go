@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"sync"
 )
 
 /**
@@ -16,7 +17,9 @@ TODO update Status work
 Theoretically the curEngineStatus has a TaskStatus that should be updated on another worker thread
 the rest is just housekeeping
 */
-func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context) {
+func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
 	method := fmt.Sprintf("[UpdateEngineInstanceStatus:%s]", c.engineInstanceId)
 	// update status every N (default is 5) seconds
 	updateStatusTimer := time.NewTimer(c.controllerConfig.updateStatusDuration)

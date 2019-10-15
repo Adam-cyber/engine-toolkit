@@ -59,7 +59,9 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 		WorkRequestId:      c.curWorkRequestId,
 		WorkRequestStatus:  c.curWorkRequestStatus,
 		WorkRequestDetails: c.curWorkRequestDetails,
+		HostId:             c.engineInstanceInfo.HostId,
 		HostAction:         c.curHostAction,
+		RequestWorkForEngineIds: c.requestWorkForEngineIds,
 		TaskStatus:         c.curTaskStatusUpdatesForTheBatch,
 		ContainerStatus:    c.curContainerStatus,
 	}
@@ -69,8 +71,8 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 		c.engineInstanceId,
 		curEngineWorkRequest, headerOpts)
 	if err != nil {
-		// would this be a failure?
-		// todo errorhandling for now just log and sleep for the next batch
+		// If there's an error -- probably need to retry in a few seconds
+		// much like the `wait`
 		log.Printf("%s returning err=%v", method, err)
 		return false, false, 0, err
 	}
@@ -84,7 +86,7 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 	case workRequestActionWait:
 		return false, true, 0, nil
 	}
-	// now we have a new batch of work
+	// now we have a new batch of work, reset the taskStatus
 
 	c.curWorkRequestId = res.WorkRequestId
 	c.curWorkRequestStatus = "pending"
@@ -147,10 +149,10 @@ func (c *ControllerUniverse) startHeartbeat(ctx context.Context, item *controlle
 
 // Work on the index-th item of the currentWorkItemsInABatch
 func (c *ControllerUniverse) Work(ctx context.Context, index int) {
-	curWorkItem := c.curWorkItemsInABatch[index]
-	curStatus := c.curTaskStatusUpdatesForTheBatch[index]
+	curWorkItem := &c.curWorkItemsInABatch[index]
+	curStatus := &c.curTaskStatusUpdatesForTheBatch[index]
 	c.updateTaskStatus(index, "running")
-	method := fmt.Sprintf("[ControllerUniverse.Work:%s (%s:%s)]", c.engineInstanceId, c.curWorkRequestId,
+	method := fmt.Sprintf("[ControllerUniverse.Work:%s,wr:%s,t:%s]", c.engineInstanceId, c.curWorkRequestId,
 		curWorkItem.InternalTaskId)
 	// make sure we have some payload!
 	payloadJSON, err := InterfaceToString(curWorkItem.TaskPayload)
@@ -166,7 +168,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	}
 	if curWorkItem.EngineType != "chunk" {
 		// start the heartbeat back to the kafka engine_status topic .. but do we have that set up at all?
-		go c.startHeartbeat(ctx, &curWorkItem)
+		go c.startHeartbeat(ctx, curWorkItem)
 	}
 
 	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
@@ -175,7 +177,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 		fallthrough
 	case engineIdWSA:
 		adapter, err := adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
-			&curWorkItem, &curStatus,
+			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
 		var errReason worker.ErrorReason
@@ -197,7 +199,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 
 	case engineIdSI2:
 		si, err := siv2.NewStreamIngestor(payloadJSON, c.engineInstanceId,
-			&curWorkItem, &curStatus,
+			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
 		var errReason worker.ErrorReason
@@ -210,7 +212,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			c.batchLock.Lock()
 			curStatus.FailureReason = string(errReason.FailureReason)
 			curStatus.ErrorCount++
-			if getInputMode(&curWorkItem) != "chunk" {
+			if getInputMode(curWorkItem) != "chunk" {
 				curStatus.TaskStatus = "failed"
 			}
 			c.batchLock.Unlock()

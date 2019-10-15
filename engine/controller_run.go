@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"os/exec"
 	"time"
+	"sync"
 )
 
 /**
@@ -68,11 +69,14 @@ func (e *Engine) runViaController(ctx context.Context) error {
 			return err
 		}
 	}
+	var wg sync.WaitGroup
 
-	go e.controller.UpdateEngineInstanceStatus(ctx)
+	go e.controller.UpdateEngineInstanceStatus(ctx, &wg)
 	// simple loop to get the work
 	var waitElapsedInSeconds int32
 	go func() {
+		wg.Add(1)
+		defer wg.Done()
 		for {
 			select {
 			case <-time.After(time.Duration(e.controller.GetTTL()) * time.Second):
@@ -102,6 +106,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 			}
 		}
 	}()
+	wg.Wait()
 	if cmd != nil {
 		// wait for the command
 		if err := cmd.Wait(); err != nil {
