@@ -56,11 +56,6 @@ Engine toolkit:
 */
 
 // enable via the VERITONE_CONTROLLER_CONFIG_JSON=the ControllerConfig
-type ManagedEngineInfo struct {
-	EngineId      string `json:"engineId"`
-	EngineMode    string `json:"engineMode"` // batch, stream, chunk
-	EngineCmdLine string `json:"engineCmdLine"`
-}
 type VeritoneControllerConfig struct {
 	ControllerMode       bool   `json:"controllerMode"`
 	ControllerUrl        string `json:"controllerUrl"`
@@ -69,9 +64,6 @@ type VeritoneControllerConfig struct {
 	Token                string `json:"token"`
 	UpdateStatusInterval string `json:"updateStatusInterval"`
 	updateStatusDuration time.Duration
-	// the map identify the engines that can be managed within this engine toolkit instance
-	ManagedEngines []ManagedEngineInfo `json:"managedEngines"`
-
 	// default ttl can be overriden here..
 	ProcessingTTLInSeconds     int32 `json:"processingTTLInSeconds`
 	LicenseExpirationInSeconds int32 `json:"licenseExpirationInSeconds"` // 0 == never expires
@@ -94,7 +86,6 @@ func SampleVeritoneControllerConfig () string {
 		HostId: GenerateUuid(),
 		Token:GenerateUuid(),
 		UpdateStatusInterval:"5s",
-		ManagedEngines:[]ManagedEngineInfo{ {EngineId:engineIdSI2,}, {EngineId:engineIdWSA,}, {EngineId:engineIdTVRA,}, {EngineId:engineIdOW,}},
 		ProcessingTTLInSeconds: 6000,
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,
