@@ -15,6 +15,10 @@ type ErrorReason struct {
 func (e *ErrorReason) String() string {
 	return fmt.Sprintf("%v: %s", e.FailureReason, e.Err.Error())
 }
+
+/**
+all internal engines should implement this interface..
+ */
 type Worker interface {
 	Run() ErrorReason
 }

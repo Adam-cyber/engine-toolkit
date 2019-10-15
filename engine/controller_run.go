@@ -80,12 +80,11 @@ func (e *Engine) runViaController(ctx context.Context) error {
 		for {
 			select {
 			case <-time.After(time.Duration(e.controller.GetTTL()) * time.Second):
-				e.logDebug(fmt.Sprintf("Time is up (TTL is %s)", e.controller.GetTTL()))
+				e.logDebug(fmt.Sprintf("Time is up (TTL is %s) -- GETTING OUT", e.controller.GetTTL()))
 				return
 			case <-ctx.Done():
 				return
 			default:
-				e.logDebug("Fetch work from controller")
 				done, waitForMore, batchSize, err := e.controller.AskForWork(ctx)
 				if done {
 					return
@@ -125,7 +124,6 @@ func (e *Engine) runViaController(ctx context.Context) error {
 
 	// one more ... tell Controller that we're terminated
 	e.controller.Terminate(ctx)
-
 	return nil
 }
 

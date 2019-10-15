@@ -11,6 +11,7 @@ const (
 	engineIdSI2  = "352556c7-de07-4d55-b33f-74b1cf237f25"
 	engineIdWSA  = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
+	engineIdOW = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
 
 	hostActionTerminate = "terminate"
 	hostActionRunning   = "running"
@@ -55,11 +56,6 @@ Engine toolkit:
 */
 
 // enable via the VERITONE_CONTROLLER_CONFIG_JSON=the ControllerConfig
-type ManagedEngineInfo struct {
-	EngineId      string `json:"engineId"`
-	EngineMode    string `json:"engineMode"` // batch, stream, chunk
-	EngineCmdLine string `json:"engineCmdLine"`
-}
 type VeritoneControllerConfig struct {
 	ControllerMode       bool   `json:"controllerMode"`
 	ControllerUrl        string `json:"controllerUrl"`
@@ -68,9 +64,6 @@ type VeritoneControllerConfig struct {
 	Token                string `json:"token"`
 	UpdateStatusInterval string `json:"updateStatusInterval"`
 	updateStatusDuration time.Duration
-	// the map identify the engines that can be managed within this engine toolkit instance
-	ManagedEngines []ManagedEngineInfo `json:"managedEngines"`
-
 	// default ttl can be overriden here..
 	ProcessingTTLInSeconds     int32 `json:"processingTTLInSeconds`
 	LicenseExpirationInSeconds int32 `json:"licenseExpirationInSeconds"` // 0 == never expires
@@ -93,7 +86,6 @@ func SampleVeritoneControllerConfig () string {
 		HostId: GenerateUuid(),
 		Token:GenerateUuid(),
 		UpdateStatusInterval:"5s",
-		ManagedEngines:[]ManagedEngineInfo{ {EngineId:engineIdSI2,}, {EngineId:engineIdWSA,}, {EngineId:engineIdTVRA,}},
 		ProcessingTTLInSeconds: 6000,
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,
