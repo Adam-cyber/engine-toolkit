@@ -13,7 +13,6 @@ const (
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
 	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
 
-
 	hostActionTerminate = "terminate"
 	hostActionRunning   = "running"
 
@@ -87,7 +86,6 @@ func SampleVeritoneControllerConfig () string {
 		HostId: GenerateUuid(),
 		Token:GenerateUuid(),
 		UpdateStatusInterval:"5s",
-
 		ProcessingTTLInSeconds: 6000,
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,
