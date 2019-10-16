@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
-
+	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 )
@@ -69,7 +69,7 @@ func (c *engineConfig) defaults() {
 		c.HeartbeatInterval = defaultHeartbeatInterval
 	}
 
-	// Stuff in defaults to avoid loading the built config.json, since we may not be guaranteed of the file
+	// Stuff in defaults to avoid loading the built config.json, since we may not be guaranteed that we wuld have files
 	c.Messaging.Kafka.ProducerMaxRetries = 1000
 	c.Messaging.Kafka.ProducerTimeout = "10s"
 
@@ -104,6 +104,54 @@ type enginePayload struct {
 	Token              string `json:"token,omitempty"`
 	VeritoneApiBaseUrl string `json:"veritoneApiBaseUrl"`
 	taskPayload        `json:"taskPayload,omitempty"`
+}
+
+/** Helper function to display adapter sample payload and env variables thatSampleStreamIngestorV2Payloadenv the adapter needs */
+func SampleAdapterPayload () string {
+	now := time.Now()
+	sampleTaskPayload:=taskPayload{
+		RecordStartTime: now.Add(-(5*time.Minute)) ,
+		RecordEndTime: now.Add(5 * time.Minute),
+		RecordDuration : "10m",
+		StartTimeOverride: time.Now().Unix(),
+		TDOOffsetMS: 50,
+		SourceID: "sourceId",
+		SourceDetails:&api.SourceDetails{
+			URL: "mySourceDetailsURL",
+			RadioStreamURL:"mySourceDetailsRadioStreamURL",
+		},
+		URL : "myURL",
+
+		CacheToS3Key: "myCacheToS3Key",
+		DisableKafka: false,
+		DisableS3: false,
+		ScfsWriterBufferSize: 50000,
+		OrganizationID: 9999,
+		ChunkSize: 1024*1000,
+
+	}
+	payload := enginePayload{
+		JobID:"myJobId",
+		TaskID:"myTaskId",
+		TDOID: "myTDOID",
+		Token: "myToken",
+		VeritoneApiBaseUrl: "https://api.veritone.com",
+		taskPayload:sampleTaskPayload,
+	}
+
+	type envvar struct {
+		Name string `json:"name"`
+		Required bool `json:"required"`
+		DefaultValue string `json:"defaultValue"`
+	}
+	envVariables:=[]envvar {
+		{ Name:"KAFKA_BROKERS", Required:true},
+		{ Name: "KAFKA_ENGINE_STATUS_TOPIC",DefaultValue:"engine_status"},
+		{ Name: "CHUNK_CACHE_BUCKET", Required:false},
+		{ Name: "MINIO_SERVER", Required:false},
+		{ Name: "CHUNK_CACHE_AWS_REGION",Required:false},
+		{Name: "VERITONE_API_TOKEN", Required:false},}
+	return fmt.Sprintf("SampleAdapterPayload:\n%s\nENV Variables: %s\n", util.ToString(payload), util.ToString(envVariables))
 }
 
 func (p enginePayload) String() string {

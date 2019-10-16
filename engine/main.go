@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
+	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
 )
 
 // BuildTag is the githash of this build.
@@ -46,7 +47,8 @@ func main() {
 func run(ctx context.Context) error {
 	eng := NewEngine()
 	eng.logDebug("engine: running")
-	eng.logDebug("Sample config: %s", controller.SampleVeritoneControllerConfig())
+	eng.logDebug("Sample Controller config: ", controller.SampleVeritoneControllerConfig())
+	eng.logDebug("Sample Adapter Input: ", adapter.SampleAdapterPayload())
 	defer eng.logDebug("engine: stopped")
 	skipKafka := false
 
