@@ -2,13 +2,14 @@ package controller
 
 import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
 	"sync"
 	"time"
 	"os"
 )
 
 const (
-	engineIdSI2  = "352556c7-de07-4d55-b33f-74b1cf237f25"
+	engineIdSI2Playback  = "352556c7-de07-4d55-b33f-74b1cf237f25"
 	engineIdWSA  = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
 	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
@@ -77,14 +78,14 @@ type VeritoneControllerConfig struct {
 }
 
 func (c *VeritoneControllerConfig) String() string {
-	return ToString(c)
+	return util.ToString(c)
 }
 func SampleVeritoneControllerConfig () string {
 	sampleConfig:=VeritoneControllerConfig{
 		ControllerMode: true,
 		ControllerUrl : "http://localhost:9000/edge/v1",
-		HostId: GenerateUuid(),
-		Token:GenerateUuid(),
+		HostId: util.GenerateUuid(),
+		Token: util.GenerateUuid(),
 		UpdateStatusInterval:"5s",
 		ProcessingTTLInSeconds: 6000,
 		LicenseExpirationInSeconds: 100000,

@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
+	"github.com/veritone/realtime/modules/engines/siv2core/scfsio/streamio"
 )
 
 const (

@@ -9,7 +9,8 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"github.com/veritone/realtime/modules/controller/worker"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2"
+	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
+	siv2playbaack "github.com/veritone/realtime/modules/engines/siv2playback"
 )
 
 /**
@@ -153,7 +154,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	method := fmt.Sprintf("[ControllerUniverse.Work:%s,wr:%s,t:%s]", c.engineInstanceId, c.curWorkRequestId,
 		curWorkItem.InternalTaskId)
 	// make sure we have some payload!
-	payloadJSON, err := InterfaceToString(curWorkItem.TaskPayload)
+	payloadJSON, err := util.InterfaceToString(curWorkItem.TaskPayload)
 	if payloadJSON == "" || err != nil {
 		// an error!!!
 		// should fail it -- What to do with failure!
@@ -180,8 +181,8 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
 
-	case engineIdSI2:
-		wrk, err = siv2.NewStreamIngestor(payloadJSON, c.engineInstanceId,
+	case engineIdSI2Playback:
+		wrk, err = siv2playbaack.NewSI2Playback(payloadJSON, c.engineInstanceId,
 			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)

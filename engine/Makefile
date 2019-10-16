@@ -12,7 +12,7 @@ release: test clean buildrelease
 
 deps:
 	# Install or update govend
-	go get -u github.com/govend/govend
+#	go get -u github.com/govend/govend
 	# Fetch vendored dependencies
 	#rm -rf ./vendor
 	govend -v

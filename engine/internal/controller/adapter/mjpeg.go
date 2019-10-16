@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
+	"github.com/veritone/realtime/modules/engines/siv2core/scfsio/streamio"
 )
 
 const mpjpegMimeType = "multipart/x-mixed-replace"

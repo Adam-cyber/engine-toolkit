@@ -16,13 +16,13 @@ import (
 	"time"
 
 	messages "github.com/veritone/edge-messages"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
+	"github.com/veritone/realtime/modules/engines/siv2core/scfsio/streamio"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
-	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
+	"github.com/veritone/realtime/modules/engines/siv2core/scfsio"
 	"github.com/veritone/realtime/modules/controller/worker"
 
 )
