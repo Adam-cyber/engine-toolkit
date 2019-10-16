@@ -10,7 +10,8 @@ import (
 	messages "github.com/veritone/edge-messages"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/stream-ingestor-v2/messaging"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio/streamio"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
+	"github.com/veritone/realtime/modules/controller/worker"
+
 )
 
 var lastStreamInfo map[string]interface{}

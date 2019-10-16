@@ -23,7 +23,8 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/scfsio"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/worker"
+	"github.com/veritone/realtime/modules/controller/worker"
+
 )
 
 const (
