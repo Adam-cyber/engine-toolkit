@@ -12,7 +12,7 @@ release: test clean buildrelease
 
 deps:
 	# Install or update govend
-#	go get -u github.com/govend/govend
+	go get -u github.com/govend/govend
 	# Fetch vendored dependencies
 	#rm -rf ./vendor
 	govend -v
@@ -43,7 +43,7 @@ test:
 BASE_IMAGE = engine-toolkit:base
 WSA_IMAGE = webstream-adapter
 TVR_IMAGE = tv-and-radio-adapter
-SI_IMAGE = stream-ingestor-v2
+SIV2_PLAYBACK_IMAGE = siv2-playback
 
 build-base-docker:
 	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
@@ -68,8 +68,8 @@ build-tv-and-radio-adapter-docker: #build-base-docker
             .
 
 
-build-si-v2: #build-base-docker
-	cd internal/controller/stream-ingestor-v2; docker build -t $(SI_IMAGE) \
+build-siv2-playback: #build-base-docker
+	cd internal/controller/engines/siv2-playback; docker build -t $(SIV2_PLAYBACK_IMAGE) \
             --build-arg MANIFEST_JSON=manifest.json \
             --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
             --build-arg release=$(release) \
@@ -100,11 +100,11 @@ run-webstream:
 		-v /tmp/cache:/cache \
 		-v /tmp/test:/tmp/test  $(WSA_IMAGE)
 
-run-si:
+run-siv2-playback:
 	docker run -it --network host --rm --entrypoint=sh --env-file controller-env.txt \
 		-v ${CURPWD}:/src \
 		-v /tmp/cache:/cache \
-		-v /tmp/test:/tmp/test $(SI_IMAGE)
+		-v /tmp/test:/tmp/test $(SIV2_PLAYBACK_IMAGE)
 
 
 

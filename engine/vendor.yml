@@ -57,6 +57,8 @@ vendors:
   rev: 7fc08349c0c760a7fe79d43c1939a7fc050a444b
 - path: github.com/matttproud/golang_protobuf_extensions
   rev: c182affec369e30f25d3eb8cd8a478dee585ae7d
+- path: github.com/mezzi/tail
+  rev: 37f4271387456dd1bf82ab1ad9229f060cc45386
 - path: github.com/mitchellh/mapstructure
   rev: 3536a929edddb9a5b34bd6861dc4a9647cb459fe
 - path: github.com/nfnt/resize
@@ -71,6 +73,8 @@ vendors:
   rev: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - path: github.com/pmezard/go-difflib
   rev: 5d4384ee4fb2527b0a1256a821ebfc92f91efefc
+- path: github.com/prometheus/client_golang
+  rev: eb4edc44747f2b520aa8123453ba0618905b92f9
 - path: github.com/prometheus/client_model
   rev: 14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016
 - path: github.com/prometheus/common
