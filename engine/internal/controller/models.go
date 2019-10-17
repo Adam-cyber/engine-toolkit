@@ -14,6 +14,8 @@ const (
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
 	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
 
+	engineIdSI2AudiVideoChunk = "8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440"
+
 	hostActionTerminate = "terminate"
 	hostActionRunning   = "running"
 

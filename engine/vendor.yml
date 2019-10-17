@@ -17,8 +17,6 @@ vendors:
   rev: d5779253526cc8a3129a0e5d7cc429f4b4473ab4
 - path: github.com/c2h5oh/datasize
   rev: 4eba002a5eaea69cf8d235a388fc6b65ae68d2dd
-- path: github.com/cespare/xxhash
-  rev: de209a9ffae3256185a6bb135d1a0ada7b2b5f09
 - path: github.com/davecgh/go-spew
   rev: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
 - path: github.com/eapache/go-resiliency
@@ -110,7 +108,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
 - path: github.com/veritone/realtime
-  rev: ebf6582c47dce5030e043eca03fafaf99c9046df
+  rev: 91a5eaff425cea9363baf6d9f6279fd7b81f7af2
 - path: github.com/veritone/webstream-adapter
   rev: 53ce102647f497de34d3125f0ac823d390f20a4e
 - path: go.uber.org/atomic

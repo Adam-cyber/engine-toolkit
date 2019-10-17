@@ -11,6 +11,7 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
 	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
 	siv2playbaack "github.com/veritone/realtime/modules/engines/siv2playback"
+	siv2audiovideo "github.com/veritone/realtime/modules/engines/siv2audiovideo"
 )
 
 /**
@@ -186,6 +187,12 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			curWorkItem, curStatus,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			&c.batchLock)
+
+	case engineIdSI2AudiVideoChunk:
+		wrk, err = siv2audiovideo.NewSIV2AudioVideoChunkEngine(payloadJSON, c.engineInstanceId,
+			curWorkItem, curStatus,
+			c.controllerConfig.GraphQLTimeoutDuration,
+			&c.batchLock, c.controllerConfig.ControllerUrl)
 
 	case engineIdOW:
 
