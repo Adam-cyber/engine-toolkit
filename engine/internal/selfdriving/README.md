@@ -1,6 +1,6 @@
 # Self driving engines
 
-| WARNING: This is experimental, use it at your own risk! |
+| WARNING: This is experimental |
 | --- |
 
 Run example:
