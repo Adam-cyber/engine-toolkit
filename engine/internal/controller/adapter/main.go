@@ -23,7 +23,7 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
 	"github.com/veritone/realtime/modules/engines/siv2core/scfsio"
-	"github.com/veritone/realtime/modules/controller/worker"
+	"github.com/veritone/realtime/modules/engines/worker"
 
 )
 
