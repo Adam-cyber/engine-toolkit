@@ -3,11 +3,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/veritone/realtime/modules/engines/outputWriter"
+	"github.com/veritone/realtime/modules/logger"
 	"log"
 	"time"
 	"github.com/antihax/optional"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
-	"github.com/veritone/realtime/modules/controller/worker"
+	"github.com/veritone/realtime/modules/engines/worker"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
 	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
 	siv2playbaack "github.com/veritone/realtime/modules/engines/siv2playback"
@@ -188,6 +190,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			&c.batchLock)
 
 	case engineIdOW:
+		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())
 
 	default:
 		panic("TO BE IMPLEMENTED")
