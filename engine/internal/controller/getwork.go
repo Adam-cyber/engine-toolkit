@@ -11,8 +11,11 @@ import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"github.com/veritone/realtime/modules/engines/worker"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
-	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
-	siv2playbaack "github.com/veritone/realtime/modules/engines/siv2playback"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
+	siv2playback "github.com/veritone/realtime/modules/engines/siv2playback"
+	siv2core "github.com/veritone/realtime/modules/engines/siv2core"
+	engines "github.com/veritone/realtime/modules/engines"
+	siv2ffmpeg "github.com/veritone/realtime/modules/engines/siv2ffmpeg"
 )
 
 /**
@@ -173,22 +176,50 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	}
 
 	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
-	var wrk  worker.Worker
+	var (
+		wrk  worker.Worker
+	    workItemStatusManager, _ = util.GetWorkItemStatusManager(curStatus, &c.batchLock)
+	    inputIOs, _ = util.GetIOInputsForWorkItem(curWorkItem)
+	    outputIOs, _ = util.GetIOOutputsForWorkItem(curWorkItem)
+	)
 	switch curWorkItem.EngineId {
-	case engineIdTVRA:
+	case engines.EngineIdTVRA:
 		fallthrough
-	case engineIdWSA:
-		wrk, err = adapter.NewAdaptor(payloadJSON, c.engineInstanceId,
-			curWorkItem, curStatus,
-			c.controllerConfig.GraphQLTimeoutDuration,
-			&c.batchLock)
+	case engines.EngineIdWSA:
+		wrk, err = adapter.NewAdaptor(payloadJSON,
+			c.engineInstanceId,
+			curWorkItem,
+			workItemStatusManager,
+			c.controllerConfig.GraphQLTimeoutDuration)
 
-	case engineIdSI2Playback:
-		wrk, err = siv2playbaack.NewSI2Playback(payloadJSON, c.engineInstanceId,
-			curWorkItem, curStatus,
+	case engines.EngineIdSI2Playback:
+		wrk, err = siv2playback.NewSI2Playback(payloadJSON,
+			c.engineInstanceId,
+			curWorkItem.EngineId,
+			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
-			&c.batchLock)
+			c.controllerConfig.ControllerUrl, workItemStatusManager,
+			inputIOs, outputIOs)
 
+	case engines.EngineIdSI2AssetCreator:
+		wrk, err = siv2core.NewSIV2Core(payloadJSON,
+			c.engineInstanceId,
+			curWorkItem.EngineId,
+			curWorkItem,
+			c.controllerConfig.GraphQLTimeoutDuration,
+			c.controllerConfig.ControllerUrl, workItemStatusManager,
+			inputIOs, outputIOs)
+
+	case engines.EngineIdSI2FFMPEG:
+		wrk, err = siv2ffmpeg.NewSIV2FFMPEG(payloadJSON,
+			c.engineInstanceId,
+			curWorkItem.EngineId,
+			curWorkItem,
+			c.controllerConfig.GraphQLTimeoutDuration,
+				c.controllerConfig.ControllerUrl, workItemStatusManager,
+					inputIOs, outputIOs)
+
+	//
 	case engineIdOW:
 		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())
 

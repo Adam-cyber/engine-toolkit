@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/veritone/realtime/modules/engines/siv2core/scfsio/streamio"
+	"github.com/veritone/realtime/modules/engines/scfsio/streamio"
 )
 
 const (

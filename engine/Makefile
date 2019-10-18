@@ -44,6 +44,8 @@ BASE_IMAGE = engine-toolkit:base
 WSA_IMAGE = webstream-adapter
 TVR_IMAGE = tv-and-radio-adapter
 SIV2_PLAYBACK_IMAGE = siv2-playback
+SIV2_FFMPEG_IMAGE = siv2-ffmpeg
+SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
 build-base-docker:
 	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
@@ -67,11 +69,30 @@ build-tv-and-radio-adapter-docker: #build-base-docker
             --build-arg githash=$(githash) \
             .
 
-
 build-siv2-playback: #build-base-docker
 	cd internal/controller/engines/siv2-playback; docker build -t $(SIV2_PLAYBACK_IMAGE) \
             --build-arg MANIFEST_JSON=manifest.json \
             --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+build-siv2-asset-creator: #build-base-docker
+	cd internal/controller/engines/siv2-ffmpeg; docker build -t $(SIV2_FFMPEG_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest.json \
+            --build-arg ENGINE_ID="75fc943b-b5b0-4fe1-bcb6-9a7e1884257a" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+build-siv2-ffmpeg: #build-base-docker
+	cd internal/controller/engines/siv2-ffmpeg; docker build -t $(SIV2_FFMPEG_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest.json \
+            --build-arg ENGINE_ID="8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440" \
             --build-arg release=$(release) \
             --build-arg builddate=$(builddate) \
             --build-arg gitbranch=$(gitbranch) \

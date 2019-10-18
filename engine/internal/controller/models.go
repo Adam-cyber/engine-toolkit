@@ -2,7 +2,7 @@ package controller
 
 import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
-	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"sync"
 	"time"
 	"os"
@@ -13,6 +13,8 @@ const (
 	engineIdWSA  = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
 	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
 	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
+
+	engineIdSI2AudiVideoChunk = "8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440"
 
 	hostActionTerminate = "terminate"
 	hostActionRunning   = "running"
