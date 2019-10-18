@@ -55,8 +55,6 @@ vendors:
   rev: 7fc08349c0c760a7fe79d43c1939a7fc050a444b
 - path: github.com/matttproud/golang_protobuf_extensions
   rev: c182affec369e30f25d3eb8cd8a478dee585ae7d
-- path: github.com/mezzi/tail
-  rev: 37f4271387456dd1bf82ab1ad9229f060cc45386
 - path: github.com/mitchellh/mapstructure
   rev: 3536a929edddb9a5b34bd6861dc4a9647cb459fe
 - path: github.com/nfnt/resize
@@ -108,7 +106,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
 - path: github.com/veritone/realtime
-  rev: 91a5eaff425cea9363baf6d9f6279fd7b81f7af2
+  rev: 8a35158d789c3589ddf29c5526eab7e906fb561a
 - path: github.com/veritone/webstream-adapter
   rev: 53ce102647f497de34d3125f0ac823d390f20a4e
 - path: go.uber.org/atomic

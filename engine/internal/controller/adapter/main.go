@@ -16,14 +16,14 @@ import (
 	"time"
 
 	messages "github.com/veritone/edge-messages"
-	"github.com/veritone/realtime/modules/engines/siv2core/scfsio/streamio"
+	"github.com/veritone/realtime/modules/engines/scfsio/streamio"
 
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 
-	"github.com/veritone/realtime/modules/engines/siv2core/scfsio"
-	"github.com/veritone/realtime/modules/controller/worker"
+	"github.com/veritone/realtime/modules/engines/scfsio"
+	"github.com/veritone/realtime/modules/engines/worker"
 
 )
 
@@ -49,12 +49,10 @@ type Streamer interface {
 type adaptor struct {
 	engineInstanceId string
 	workItem         *controllerClient.EngineInstanceWorkItem
-	workItemStatus   *controllerClient.TaskStatusUpdate
-	statusLock       *sync.Mutex
 
 	payload *enginePayload
 	config  *engineConfig
-
+	workItemStatusManager scfsio.WorkItemStatusManager
 	apiToken    string
 	httpClient  *http.Client
 	kafkaClient messaging.Client
@@ -63,9 +61,8 @@ type adaptor struct {
 func NewAdaptor(payloadJSON string,
 	engineInstanceId string,
 	workItem *controllerClient.EngineInstanceWorkItem,
-	workItemStatus *controllerClient.TaskStatusUpdate,
-	graphQlTimeoutDuration string,
-	statusLock *sync.Mutex) (res worker.Worker, err error) {
+	workItemStatusManager scfsio.WorkItemStatusManager,
+	graphQlTimeoutDuration string) (res worker.Worker, err error) {
 
 	method := fmt.Sprintf("[AdaptorMain:engineId=%s, engineInstanceId=%s]", workItem.EngineId, engineInstanceId)
 	if graphQlTimeoutDuration == "" {
@@ -73,15 +70,7 @@ func NewAdaptor(payloadJSON string,
 	}
 	config, payload, err := loadConfigAndPayload(payloadJSON, workItem.EngineId, engineInstanceId, graphQlTimeoutDuration)
 	if err != nil {
-		// TODO better error ...
-		statusLock.Lock()
-		workItemStatus.TaskStatus = "failed"
-		workItemStatus.ErrorCount++
-		workItemStatus.FailureReason = fmt.Sprintf("Internal")
-		workItemStatus.TaskOutput = map[string]interface{}{"error": fmt.Sprintf("Failed to load config and payload, err=%v", err)}
-		statusLock.Unlock()
-		log.Printf("%s failed to load payload or config, err=%v", method, err)
-		return nil, errors.Wrapf(err, "%s failed in loading payload/config", method)
+		return nil, workItemStatusManager.ReportError(false, err, workItem.TaskId, "Internal", "Failed to load config and payload")
 	}
 
 	log.Printf("config=%s", method, config)
@@ -100,9 +89,6 @@ func NewAdaptor(payloadJSON string,
 	config.Messaging.Kafka.ClientIDPrefix = fmt.Sprintf("adapter:%s_", workItem.EngineId)
 	kafkaClient, err := messaging.NewKafkaClient(config.Messaging.Kafka)
 	if err != nil {
-		statusLock.Lock()
-		workItemStatus.ErrorCount++ // do we need to care for now?
-		statusLock.Unlock()
 		log.Printf("%s got error in establishing Kafka client -- ignore for now. Err=%v", method, err)
 	}
 
@@ -117,13 +103,12 @@ func NewAdaptor(payloadJSON string,
 	return &adaptor{
 		engineInstanceId: engineInstanceId,
 		workItem:         workItem,
-		workItemStatus:   workItemStatus,
-		statusLock:       statusLock,
 		apiToken:         apiToken,
 		payload:          payload,
 		config:           config,
 		httpClient:       httpClient,
 		kafkaClient:      kafkaClient,
+		workItemStatusManager: workItemStatusManager,
 	}, nil
 }
 

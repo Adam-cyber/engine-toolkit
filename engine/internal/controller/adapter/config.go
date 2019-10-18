@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
-	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/api"
 	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter/messaging"
 )

@@ -11,7 +11,8 @@ import (
 	"time"
 	"os/exec"
 	"strings"
-	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
+	"github.com/veritone/realtime/modules/engines"
 )
 
 func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion, etBuildTime, etBuildTag string) (*ControllerUniverse, error) {
@@ -167,9 +168,11 @@ func discoverEngines() []string {
 	}
 	// TODO -- need to really check for ffmpeg, streamlink as required by adapters, si
 	// or now we'll just blindly think that it's there
-	res = append(res, engineIdTVRA)
-	res = append(res, engineIdWSA)
-	res = append(res, engineIdSI2Playback)
-	res = append(res, engineIdOW)
+	res = append(res, engines.EngineIdTVRA)
+	res = append(res, engines.EngineIdWSA)
+	res = append(res, engines.EngineIdSI2Playback)
+	res = append(res, engines.EngineIdSI2AssetCreator)
+	res = append(res, engines.EngineIdSI2FFMPEG)
+	res = append(res, engines.EngineIdOW)
 	return res
 }

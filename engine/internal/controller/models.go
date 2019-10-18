@@ -2,7 +2,7 @@ package controller
 
 import (
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
-	util "github.com/veritone/realtime/modules/engines/siv2core/scfsio"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"sync"
 	"time"
 	"os"
