@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/veritone/realtime/modules/engines/outputWriter"
+	"github.com/veritone/realtime/modules/logger"
 	"log"
 	"time"
 	"github.com/antihax/optional"
@@ -219,6 +221,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 
 	//
 	case engineIdOW:
+		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())
 
 	default:
 		panic("TO BE IMPLEMENTED")
