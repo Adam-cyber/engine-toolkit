@@ -14,7 +14,7 @@ deps:
 	# Install or update govend
 	go get -u github.com/govend/govend
 	# Fetch vendored dependencies
-	#rm -rf ./vendor
+	rm -rf ./vendor
 	govend -v
 
 generate-deps:
@@ -25,8 +25,8 @@ generate-deps:
 buildrelease:
 	rm -rf dist
 	mkdir dist
-	#GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
-	GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	#GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
 	cp -a release dist/engine-toolkit-sdk-$(release)
 	cd dist && tar cvvzf engine-toolkit-sdk-$(release).tar.gz engine-toolkit-sdk-$(release)
 
@@ -48,7 +48,9 @@ SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
 build-base-docker:
-	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
+	docker build -t $(BASE_IMAGE) \
+            --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
+            --build-arg githash=$(githash) .
 
 build-webstream-adapter-docker: # build-base-docker
 	cd internal/controller/adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
