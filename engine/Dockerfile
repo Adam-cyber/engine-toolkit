@@ -22,7 +22,8 @@ RUN echo ${GITHUB_ACCESS_TOKEN}
 RUN apk update && apk add -U build-base git curl libstdc++ ca-certificates
 RUN git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
 RUN mkdir /app 
+ENV CGO_ENABLED=0
 RUN GOPATH=/go githash=${githash} make -e deps
-RUN GOPATH=/go githash=${githash} make -e buildrelease && cp release/bin/engine /app/
+RUN GOPATH=/go githash=${githash} make -e alpine && cp release/bin/engine /app/
 
 
