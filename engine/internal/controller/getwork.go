@@ -219,12 +219,13 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 				c.controllerConfig.ControllerUrl, workItemStatusManager,
 					inputIOs, outputIOs)
 
-	case
-	//
 	case engineIdOW:
 		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())
 
 	default:
+		/*
+		at this point we have
+		 */
 		panic("TO BE IMPLEMENTED")
 	}
 
