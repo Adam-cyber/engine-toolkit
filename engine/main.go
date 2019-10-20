@@ -9,7 +9,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
-	wsa_tvr "github.com/veritone/realtime/modules/engines/wsa_tvr_adapter"
 )
 
 // BuildTag is the githash of this build.
