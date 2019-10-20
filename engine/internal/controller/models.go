@@ -86,6 +86,7 @@ func SampleVeritoneControllerConfig () string {
 	sampleConfig:=VeritoneControllerConfig{
 		ControllerMode: true,
 		ControllerUrl : "http://localhost:9000/edge/v1",
+		SkipOutputToKafka:true,
 		HostId: util.GenerateUuid(),
 		Token: util.GenerateUuid(),
 		UpdateStatusInterval:"5s",
@@ -93,6 +94,7 @@ func SampleVeritoneControllerConfig () string {
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,
 		IdleWaitTimeoutInSeconds: 60,
+		GraphQLTimeoutDuration: "3m",
 	}
 	return sampleConfig.String()
 }

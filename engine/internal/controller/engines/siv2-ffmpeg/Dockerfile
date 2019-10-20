@@ -14,14 +14,14 @@ ARG release
 ARG builddate
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates mime-support \
+    && apt-get install -y ca-certificates python3 mime-support streamlink \
     && rm -rf /var/lib/apt/lists
 
 RUN mkdir -p /app/data
 WORKDIR /app
 
 COPY --from=builder /app/engine /app/
-ENV RELEASE_NOTES="etversion=${release};builddate=${builddate};branch=${gitbranch};commit=${githash}"
+ENV RELEASE_NOTES="ETversion=${release};builddate=${builddate};branch=${gitbranch};commit=${githash}"
 ADD ${MANIFEST_JSON} /var/manifest.json
 RUN sed -i "s#RELEASE_NOTES#$RELEASE_NOTES#g" /var/manifest.json
 

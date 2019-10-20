@@ -25,8 +25,8 @@ generate-deps:
 buildrelease:
 	rm -rf dist
 	mkdir dist
-	#GO111MODULE=on GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
-	GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	#GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
 	cp -a release dist/engine-toolkit-sdk-$(release)
 	cd dist && tar cvvzf engine-toolkit-sdk-$(release).tar.gz engine-toolkit-sdk-$(release)
 
@@ -48,10 +48,12 @@ SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
 build-base-docker:
-	docker build -t $(BASE_IMAGE)  --build-arg githash=$(githash) .
+	docker build -t $(BASE_IMAGE) \
+            --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
+            --build-arg githash=$(githash) .
 
 build-webstream-adapter-docker: # build-base-docker
-	cd internal/controller/adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
+	cd internal/controller/engines/tvr_wsa_adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
             --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
             --build-arg release=$(release) \
             --build-arg builddate=$(builddate) \
@@ -60,7 +62,7 @@ build-webstream-adapter-docker: # build-base-docker
            .
 
 build-tv-and-radio-adapter-docker: #build-base-docker
-	cd internal/controller/adapter; docker build -t $(TVR_IMAGE) \
+	cd internal/controller/engines/tvr_wsa_adapter; docker build -t $(TVR_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
             --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
             --build-arg release=$(release) \
