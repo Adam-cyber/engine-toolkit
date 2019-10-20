@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
+	wsa_tvr "github.com/veritone/realtime/modules/engines/wsa_tvr_adapter"
 )
 
 // BuildTag is the githash of this build.
@@ -47,8 +47,7 @@ func main() {
 func run(ctx context.Context) error {
 	eng := NewEngine()
 	eng.logDebug("engine: running")
-	eng.logDebug("Sample Controller config: ", controller.SampleVeritoneControllerConfig())
-	eng.logDebug("Sample Adapter Input: ", adapter.SampleAdapterPayload())
+
 	defer eng.logDebug("engine: stopped")
 	skipKafka := false
 

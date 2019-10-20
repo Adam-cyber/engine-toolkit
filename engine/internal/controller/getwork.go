@@ -10,7 +10,7 @@ import (
 	"github.com/antihax/optional"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	"github.com/veritone/realtime/modules/engines/worker"
-	"github.com/veritone/engine-toolkit/engine/internal/controller/adapter"
+	wsa_tvr "github.com/veritone/realtime/modules/engines/wsa_tvr_adapter"
 	util "github.com/veritone/realtime/modules/engines/scfsio"
 	siv2playback "github.com/veritone/realtime/modules/engines/siv2playback"
 	siv2core "github.com/veritone/realtime/modules/engines/siv2core"
@@ -186,19 +186,21 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	case engines.EngineIdTVRA:
 		fallthrough
 	case engines.EngineIdWSA:
-		wrk, err = adapter.NewAdaptor(payloadJSON,
+		wrk, err = wsa_tvr.NewAdapter(payloadJSON,
 			c.engineInstanceId,
 			curWorkItem,
+			c.controllerConfig.GraphQLTimeoutDuration,
+			c.controllerConfig.ControllerUrl,
 			workItemStatusManager,
-			c.controllerConfig.GraphQLTimeoutDuration)
+			inputIOs, outputIOs)
 
 	case engines.EngineIdSI2Playback:
 		wrk, err = siv2playback.NewSI2Playback(payloadJSON,
 			c.engineInstanceId,
-			curWorkItem.EngineId,
 			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
-			c.controllerConfig.ControllerUrl, workItemStatusManager,
+			c.controllerConfig.ControllerUrl,
+			workItemStatusManager,
 			inputIOs, outputIOs)
 
 	case engines.EngineIdSI2AssetCreator:
@@ -207,7 +209,8 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			curWorkItem.EngineId,
 			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
-			c.controllerConfig.ControllerUrl, workItemStatusManager,
+			c.controllerConfig.ControllerUrl,
+			workItemStatusManager,
 			inputIOs, outputIOs)
 
 	case engines.EngineIdSI2FFMPEG:
@@ -216,8 +219,9 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 			curWorkItem.EngineId,
 			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
-				c.controllerConfig.ControllerUrl, workItemStatusManager,
-					inputIOs, outputIOs)
+			c.controllerConfig.ControllerUrl,
+			workItemStatusManager,
+			inputIOs, outputIOs)
 
 	case engineIdOW:
 		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())

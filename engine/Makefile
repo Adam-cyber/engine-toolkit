@@ -53,7 +53,7 @@ build-base-docker:
             --build-arg githash=$(githash) .
 
 build-webstream-adapter-docker: # build-base-docker
-	cd internal/controller/adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
+	cd internal/controller/engines/tvr_wsa_adapter; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
             --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
             --build-arg release=$(release) \
             --build-arg builddate=$(builddate) \
@@ -62,7 +62,7 @@ build-webstream-adapter-docker: # build-base-docker
            .
 
 build-tv-and-radio-adapter-docker: #build-base-docker
-	cd internal/controller/adapter; docker build -t $(TVR_IMAGE) \
+	cd internal/controller/engines/tvr_wsa_adapter; docker build -t $(TVR_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
             --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
             --build-arg release=$(release) \
