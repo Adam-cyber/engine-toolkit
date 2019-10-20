@@ -1,0 +1,14 @@
+{
+	"engineId": "75fc943b-b5b0-4fe1-bcb6-9a7e1884257a",
+	"url": "https://github.com/veritone/engine-toolkit",
+	"category": "ingestion",
+	"engineMode": "stream",
+	"externalCalls": [],
+	"preferredInputFormat": "application/json",
+	"outputFormats": ["video/mp4"],
+	"clusterSize": "custom",
+	"customProfile": "stream-ingestor",
+	"initialConcurrency": 50,
+	"maxConcurrency": 50,
+        "releaseNotes": "RELEASE_NOTES"
+}

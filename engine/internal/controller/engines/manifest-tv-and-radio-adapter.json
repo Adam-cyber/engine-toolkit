@@ -1,0 +1,18 @@
+{
+	"engineId": "74dfd76b-472a-48f0-8395-c7e01dd7fd24",
+	"url": "https://github.com/veritone/tv-and-radio-adapter/74dfd76b-472a-48f0-8395-c7e01dd7fd24/",
+	"category": "ingestion",
+	"engineMode": "stream",
+	"externalCalls": [],
+	"preferredInputFormat": "application/json",
+	"outputFormats": ["video/webm"],
+	"clusterSize": "custom",
+	"customProfile": "webstream-adapter",
+	"initialConcurrency": 50,
+	"maxConcurrency": 50,
+	"schedule": "recurring",
+	"ingestion": {
+		"supportedSourceTypes": ["1", "2"]
+	},
+        "releaseNotes": "RELEASE_NOTES"
+}
