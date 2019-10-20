@@ -142,4 +142,4 @@ vendors:
 - path: gopkg.in/yaml.v2
   rev: f221b8435cfb71e54062f6c6e99e9ade30b124d5
 - path: github.com/go-redis/redis
-  rev: 3ad29557285e162b009c3e00abf1e68599e61d04
+  rev: 69c8af34df7a2f3e80754203614031ea9386cba9
