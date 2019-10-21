@@ -1,0 +1,6 @@
+githash = $(shell git rev-parse HEAD)
+release = v0.1.16
+gitbranch = $(shell git rev-parse --abbrev-ref HEAD)
+builddate = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+
+ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(builddate) -X main.BuildTag=$(githash)
