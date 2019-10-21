@@ -58,6 +58,7 @@ SIV2_PLAYBACK_IMAGE = siv2-playback
 SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
+build-all-engines: build-engine-base-docker build-base-docker build-webstream-adapter-docker build-tv-and-radio-adapter-docker build-siv2-playback build-siv2-asset-creator build-siv2-ffmpeg
 
 ## set up a base Docker with ffmpeg, mime-support, streamlink
 # Must do this at least once.
@@ -104,7 +105,7 @@ build-siv2-playback: #build-base-docker
 
 build-siv2-asset-creator: #build-base-docker
 	cd internal/controller/engines; docker build -t $(SIV2_ASSET_CREATOR_IMAGE) \
-            --build-arg MANIFEST_JSON=manifest.json \
+            --build-arg MANIFEST_JSON=manifest-siv2-asset-creator.json \
             --build-arg ENGINE_ID="75fc943b-b5b0-4fe1-bcb6-9a7e1884257a" \
             --build-arg ENGINE_NAME="SIv2 Asset Creator" \
             --build-arg release=$(release) \
