@@ -22,7 +22,9 @@ SIV2_PLAYBACK_IMAGE = siv2-playback
 SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
-build-all-engines: build-engine-base-docker build-base-docker build-webstream-adapter-docker build-tv-and-radio-adapter-docker build-siv2-playback build-siv2-asset-creator build-siv2-ffmpeg
+#build-all-engines: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
+build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
+push-all: push-wsa push-tvr push-playback push-asset push-ffmpeg
 
 ## set up a base Docker with ffmpeg, mime-support, streamlink
 # Must do this at least once.
@@ -35,7 +37,7 @@ build-base-docker:
             --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
             --build-arg githash=$(githash) .
 
-build-webstream-adapter-docker: # build-base-docker
+build-wsa: # build-base-docker
 	cd internal/controller/engines; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
             --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
             --build-arg ENGINE_NAME="Webstream adapter" \
@@ -45,7 +47,7 @@ build-webstream-adapter-docker: # build-base-docker
             --build-arg githash=$(githash) \
            .
 
-build-tv-and-radio-adapter-docker: #build-base-docker
+build-tvr: #build-base-docker
 	cd internal/controller/engines; docker build -t $(TVR_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
             --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
@@ -56,7 +58,7 @@ build-tv-and-radio-adapter-docker: #build-base-docker
             --build-arg githash=$(githash) \
             .
 
-build-siv2-playback: #build-base-docker
+build-playback: #build-base-docker
 	cd internal/controller/engines; docker build -t $(SIV2_PLAYBACK_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-siv2-playback.json \
             --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
@@ -67,7 +69,7 @@ build-siv2-playback: #build-base-docker
             --build-arg githash=$(githash) \
             .
 
-build-siv2-asset-creator: #build-base-docker
+build-asset: #build-base-docker
 	cd internal/controller/engines; docker build -t $(SIV2_ASSET_CREATOR_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-siv2-asset-creator.json \
             --build-arg ENGINE_ID="75fc943b-b5b0-4fe1-bcb6-9a7e1884257a" \
@@ -78,7 +80,7 @@ build-siv2-asset-creator: #build-base-docker
             --build-arg githash=$(githash) \
             .
 
-build-siv2-ffmpeg: #build-base-docker
+build-ffmpeg: #build-base-docker
 	cd internal/controller/engines; docker build -t $(SIV2_FFMPEG_IMAGE) \
             --build-arg MANIFEST_JSON=manifest-siv2-ffmpeg.json \
             --build-arg ENGINE_ID="8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440" \
@@ -113,7 +115,7 @@ run-webstream:
 		-v /tmp/cache:/cache \
 		-v /tmp:/tmp  $(WSA_IMAGE)
 
-run-siv2-playback:
+run-playback:
 	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
 		-v ${CURPWD}:/src \
 		-v /tmp/cache:/cache \
@@ -130,7 +132,23 @@ run-base:
 
 # ----------------------------------------
 PROD_VDA=docker.veritone.com/7682
-push-si-playback:
-	docker tag $(SIV2_PLAYBACK_IMAGE) (PROD_VDA)/$(SIV2_PLAYBACK_IMAGE)
-	docker push (PROD_VDA)/$(SIV2_PLAYBACK_IMAGE)
+DEV_VDA=docker.aws-dev.veritone.com/7682
+
+ENV_VDA=$(DEV_VDA)
+
+push-wsa:
+	docker tag $(WSA_IMAGE) $(ENV_VDA)/$(WSA_IMAGE)
+	docker push $(ENV_VDA)/$(WSA_IMAGE)
+push-tvr:
+	docker tag $(TVR_IMAGE) $(ENV_VDA)/$(TVR_IMAGE)
+	docker push $(ENV_VDA)/$(TVR_IMAGE)
+push-playback:
+	docker tag $(SIV2_PLAYBACK_IMAGE) $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
+push-asset:
+	docker tag $(SIV2_ASSET_CREATOR_IMAGE) $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
+push-ffmpeg:
+	docker tag $(SIV2_FFMPEG_IMAGE) $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
 

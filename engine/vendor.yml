@@ -106,7 +106,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
 - path: github.com/veritone/realtime
-  rev: 329ea40f31d531d58273ea7c1d7bc76cbe0ff11b
+  rev: 04d673b641a30703e16b60e7757483387dc1d281
 - path: github.com/veritone/webstream-adapter
   rev: 53ce102647f497de34d3125f0ac823d390f20a4e
 - path: go.uber.org/atomic
@@ -143,3 +143,5 @@ vendors:
   rev: f221b8435cfb71e54062f6c6e99e9ade30b124d5
 - path: github.com/go-redis/redis
   rev: 69c8af34df7a2f3e80754203614031ea9386cba9
+- path: github.com/cbroglie/mustache
+  rev: 73b1f3905474dd28d480fbb3f1da71b625a58e76

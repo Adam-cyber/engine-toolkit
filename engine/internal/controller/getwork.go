@@ -144,12 +144,7 @@ func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.curTaskStatusUpdatesForTheBatch[index].TaskStatus = status
 }
 
-// TODO start the heart beat for the task
-// Heartbeat -- could have the info = the engine instance status update for the task
-func (c *ControllerUniverse) startHeartbeat(ctx context.Context, item *controllerClient.EngineInstanceWorkItem) {
-	// placeholder
-	log.Println("TODO TODO TODO HEARTBEAT FOR NON-CHUNK ENGINE")
-}
+
 
 // Work on the index-th item of the currentWorkItemsInABatch
 func (c *ControllerUniverse) Work(ctx context.Context, index int) {
@@ -170,10 +165,7 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 		c.batchLock.Unlock()
 		return
 	}
-	if curWorkItem.EngineType != "chunk" {
-		// start the heartbeat back to the kafka engine_status topic .. but do we have that set up at all?
-		go c.startHeartbeat(ctx, curWorkItem)
-	}
+
 
 	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
 	var (
@@ -206,7 +198,6 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	case engines.EngineIdSI2AssetCreator:
 		wrk, err = siv2core.NewSIV2Core(payloadJSON,
 			c.engineInstanceId,
-			curWorkItem.EngineId,
 			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			c.controllerConfig.ControllerUrl,
@@ -216,7 +207,6 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	case engines.EngineIdSI2FFMPEG:
 		wrk, err = siv2ffmpeg.NewSIV2FFMPEG(payloadJSON,
 			c.engineInstanceId,
-			curWorkItem.EngineId,
 			curWorkItem,
 			c.controllerConfig.GraphQLTimeoutDuration,
 			c.controllerConfig.ControllerUrl,
@@ -228,14 +218,20 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 
 	default:
 		/*
-		at this point we have
+		 TODO for other chunk engines:
+			* need to read from the task's input IO
+		    * Acquire a chunk
+		    	* read the `media-chunk` from the userMetadata for the chunk
+		        * handling similar to that of the `runInference`.
+		        * However for the output --> we'll need to write to the output, if provided AND chunk_all
+		           Also some house keeping:  increment the processedCount for both input/output
 		 */
 		panic("TO BE IMPLEMENTED")
 	}
 
 	var errReason worker.ErrorReason
 	if err == nil {
-		errReason = wrk.Run()
+		errReason = wrk.Run(ctx)
 	}
 	if errReason.Err != nil {
 		// print stuff

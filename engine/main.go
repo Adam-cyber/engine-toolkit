@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
+	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
 // BuildTag is the githash of this build.
@@ -77,7 +78,7 @@ func run(ctx context.Context) error {
 			// TODO MAY NOT NEED THIS
 
 			if !eng.Config.ControllerConfig.SkipOutputToKafka {
-				eng.producer, err = newKafkaProducer(eng.Config.Kafka.Brokers)
+				eng.producer, err = processing.NewKafkaProducer(eng.Config.Kafka.Brokers)
 				if err != nil {
 					return errors.Wrap(err, "kafka producer")
 				}
@@ -93,12 +94,12 @@ func run(ctx context.Context) error {
 		eng.logDebug("chunk topic:", eng.Config.Kafka.ChunkTopic)
 		var err error
 		var cleanup func()
-		eng.consumer, cleanup, err = newKafkaConsumer(eng.Config.Kafka.Brokers, eng.Config.Kafka.ConsumerGroup, eng.Config.Kafka.InputTopic)
+		eng.consumer, cleanup, err = processing.NewKafkaConsumer(eng.Config.Kafka.Brokers, eng.Config.Kafka.ConsumerGroup, eng.Config.Kafka.InputTopic)
 		if err != nil {
 			return errors.Wrap(err, "kafka consumer")
 		}
 		defer cleanup()
-		eng.producer, err = newKafkaProducer(eng.Config.Kafka.Brokers)
+		eng.producer, err = processing.NewKafkaProducer(eng.Config.Kafka.Brokers)
 		if err != nil {
 			return errors.Wrap(err, "kafka producer")
 		}

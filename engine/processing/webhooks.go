@@ -1,4 +1,4 @@
-package main
+package processing
 
 import (
 	"bytes"
@@ -22,12 +22,12 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
-func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
+func NewRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
 	pathhash := hash(file.Path)
 	mimeType := mime.TypeByExtension(filepath.Ext(file.Path))
 	var width, height int
 	if strings.HasPrefix(mimeType, "image") {
-		width, height = e.getImageWidthAndHeight(file.Path)
+		width, height = getImageWidthAndHeight(file.Path)
 	}
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -70,8 +70,8 @@ func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*
 	return req, nil
 }
 
-func (e *Engine) newRequestFromMediaChunk(client *http.Client, processURL string, msg mediaChunkMessage) (*http.Request, error) {
-	payload, err := msg.unmarshalPayload()
+func NewRequestFromMediaChunk(client *http.Client, processURL string, msg MediaChunkMessage, disableChunkDownload bool) (*http.Request, error) {
+	payload, err := msg.UnmarshalPayload()
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal payload")
 	}
@@ -93,7 +93,7 @@ func (e *Engine) newRequestFromMediaChunk(client *http.Client, processURL string
 	_ = w.WriteField("veritoneApiBaseUrl", payload.VeritoneAPIBaseURL)
 	_ = w.WriteField("token", payload.Token)
 	_ = w.WriteField("payload", string(msg.TaskPayload))
-	if !e.Config.Processing.DisableChunkDownload && msg.CacheURI != "" {
+	if !disableChunkDownload && msg.CacheURI != "" {
 		f, err := w.CreateFormFile("chunk", "chunk.data")
 		if err != nil {
 			return nil, err
@@ -128,16 +128,16 @@ func hash(text string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func (e *Engine) getImageWidthAndHeight(filename string) (int, int) {
+func getImageWidthAndHeight(filename string) (int, int) {
 	f, err := os.Open(filename)
 	if err != nil {
-		e.logDebug("getImageWidthAndHeight: cannot open file:", err)
+//todo		e.logDebug("getImageWidthAndHeight: cannot open file:", err)
 		return 0, 0
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		e.logDebug("getImageWidthAndHeight: cannot decode image:", err)
+//todo		e.logDebug("getImageWidthAndHeight: cannot decode image:", err)
 		return 0, 0
 	}
 	b := img.Bounds()

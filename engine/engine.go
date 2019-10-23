@@ -24,14 +24,15 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
+	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
 // Engine consumes messages and calls webhooks to
 // fulfil the requests.
 type Engine struct {
-	producer      Producer
-	eventProducer Producer
-	consumer      Consumer
+	producer      processing.Producer
+	eventProducer processing.Producer
+	consumer      processing.Consumer
 
 	// processingSemaphore is a buffered channel that controls how
 	// many concurrent processing tasks will be performed.
@@ -173,7 +174,7 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 
 func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File) error {
 	e.logDebug("processing file:", file)
-	req, err := e.newRequestFromFile(e.Config.Webhooks.Process.URL, file)
+	req, err := processing.NewRequestFromFile(e.Config.Webhooks.Process.URL, file)
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
@@ -347,13 +348,13 @@ func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage
 		e.addProcessingTime(now.Sub(start))
 	}()
 	var typeCheck struct {
-		Type messageType
+		Type processing.MessageType
 	}
 	if err := json.Unmarshal(msg.Value, &typeCheck); err != nil {
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
 	switch typeCheck.Type {
-	case messageTypeMediaChunk:
+	case processing.MessageTypeMediaChunk:
 		if err := e.processMessageMediaChunk(ctx, msg); err != nil {
 			return errors.Wrap(err, "process media chunk")
 		}
@@ -365,7 +366,7 @@ func (e *Engine) processMessage(ctx context.Context, msg *sarama.ConsumerMessage
 
 // processMessageMediaChunk processes a single media chunk as described by the sarama.ConsumerMessage.
 func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.ConsumerMessage) error {
-	var mediaChunk mediaChunkMessage
+	var mediaChunk processing.MediaChunkMessage
 	if err := json.Unmarshal(msg.Value, &mediaChunk); err != nil {
 		return errors.Wrap(err, "unmarshal message value JSON")
 	}
@@ -376,11 +377,11 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		TaskID:  mediaChunk.TaskID,
 		ChunkID: mediaChunk.ChunkUUID,
 	})
-	finalUpdateMessage := chunkResult{
-		Type:      messageTypeChunkResult,
+	finalUpdateMessage := processing.ChunkResult{
+		Type:      processing.MessageTypeChunkResult,
 		TaskID:    mediaChunk.TaskID,
 		ChunkUUID: mediaChunk.ChunkUUID,
-		Status:    chunkStatusSuccess, // optimistic
+		Status:    processing.ChunkStatusSuccess, // optimistic
 	}
 	defer func() {
 		// send the final (ChunkResult) message
@@ -409,7 +410,8 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	)
 	var content string
 	err := retry.Do(func() error {
-		req, err := e.newRequestFromMediaChunk(e.webhookClient, e.Config.Webhooks.Process.URL, mediaChunk)
+		req, err := processing.NewRequestFromMediaChunk(e.webhookClient, e.Config.Webhooks.Process.URL,
+			mediaChunk, e.Config.Processing.DisableChunkDownload)
 		if err != nil {
 			return errors.Wrap(err, "new request")
 		}
@@ -440,7 +442,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		}
 		if strings.HasPrefix(mediaType, "multipart/") {
 			// files output
-			payload, err := mediaChunk.unmarshalPayload()
+			payload, err := mediaChunk.UnmarshalPayload()
 			if err != nil {
 				return errors.Wrap(err, "unmarshal payload")
 			}
@@ -460,6 +462,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 				if err != nil {
 					return errors.Wrap(err, "reading multipart response")
 				}
+				// todo edge514- what's the user case here what's the assetType?
 				assetCreate := AssetCreate{
 					ContainerTDOID: mediaChunk.TDOID,
 					ContentType:    p.Header.Get("Content-Type"),
@@ -494,19 +497,19 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	})
 	if err != nil {
 		// send error message
-		finalUpdateMessage.Status = chunkStatusError
+		finalUpdateMessage.Status = processing.ChunkStatusError
 		finalUpdateMessage.ErrorMsg = err.Error()
 		finalUpdateMessage.FailureReason = "internal_error"
 		finalUpdateMessage.FailureMsg = finalUpdateMessage.ErrorMsg
 		return err
 	}
 	if ignoreChunk {
-		finalUpdateMessage.Status = chunkStatusIgnored
+		finalUpdateMessage.Status = processing.ChunkStatusIgnored
 		return nil
 	}
 	// send output message
-	outputMessage := mediaChunkMessage{
-		Type:          messageTypeEngineOutput,
+	outputMessage := processing.MediaChunkMessage{
+		Type:          processing.MessageTypeEngineOutput,
 		TaskID:        mediaChunk.TaskID,
 		JobID:         mediaChunk.JobID,
 		ChunkUUID:     mediaChunk.ChunkUUID,
