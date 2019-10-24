@@ -3,15 +3,14 @@
 | WARNING: This is experimental |
 | --- |
 
-Run example:
+## Running engines in self-driving mode
 
-Minimal to run with docker:
-
-- `VERITONE_SELFDRIVING=true` to tell that is running using the self-driving from filesystem
-- Volume dir for input, mapped to `/files/in`
-- Volume dir for completed, mapped to `/files/out/completed`
-- Volume dir for errors, mapped to `/files/out/errors`
-- Volume dir for results, mapped to `/files/out/results`
+- `VERITONE_SELFDRIVING=true` to switch on self-driving from filesystem
+- Volume dir for input, mapped internally to `/files/in`
+- Volume dir for completed, mapped internally to `/files/out/completed`
+- Volume dir for errors, mapped internally to `/files/out/errors`
+- Volume dir for results, mapped internally to `/files/out/results`
+- Add additional environemnt variables (below) to configure the behaviour of the engine
 
 Example:
 
@@ -27,7 +26,7 @@ docker run \
 	-t exif-extraction-engine --name exif-extraction-engine
 ```
 
-Environment variables:
+## Environment variables
 
 - `VERITONE_SELFDRIVING=true` (default false) enables self-driving from filesytem
 - `VERITONE_SELFDRIVING_WAITREADYFILES=false` waits to process the file until a `.ready` file exists
@@ -35,6 +34,30 @@ Environment variables:
 - `VERITONE_SELFDRIVING_OUTPUT_DIR_PATTERN=yyyy/mm/dd` (defaults to empty) pattern for output folders, supports some time tokens (such as "yyyy" for year)
 - `VERITONE_SELFDRIVING_POLLINTERVAL=5m` (defaults 1m) duration to wait between polling intervals to check for new files to processs
 - `VERITONE_SELFDRIVING_MINIMUM_MODIFIED_DURATION=2m` (defaults 1m) duration to wait after a file is last modified before the file will be a cadidate for processing
+
+## Payload
+
+To provide a payload to a self-driving engine, put the a file called `payload.json` inside the input folder.
+
+A typical `payload.json` file might look like this:
+
+```javascript
+{
+	"applicationId": "applicationId",
+	"recordingId": "recordingId",
+	"jobId": "jobId",
+	"taskId": "taskId",
+	"token": "token",
+	"mode": "mode",
+	"libraryId": "libraryId",
+	"libraryEngineModelId": "libraryEngineModelId",
+	"veritoneApiBaseUrl": "https://api.veritone.com"
+}
+```
+
+* Some values will be directly available in the HTTP request made to the Process webhook, for others you will need to unmarshal the `payload` field (which will contain the contents of the `payload.json` file from the input folder).
+
+## More information
 
 Basic flow of Self-Driving:
 

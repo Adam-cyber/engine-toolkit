@@ -39,7 +39,9 @@ type RandomSelector struct {
 	// file alongside it. This should be used when the output from another
 	// engine is the input to this engine.
 	WaitForReadyFiles bool
-
+	// inputPatterns is the list of patterns which input files must
+	// adhear to in order to be selected. The comparison is an OR, which means
+	// if a file matches any of the patterns, it may be selected.
 	inputPatterns []string
 }
 

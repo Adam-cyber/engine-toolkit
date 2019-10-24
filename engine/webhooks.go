@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -22,12 +23,23 @@ import (
 	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
 )
 
-func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*http.Request, error) {
+func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File, payloadJSON []byte) (*http.Request, error) {
 	pathhash := hash(file.Path)
 	mimeType := mime.TypeByExtension(filepath.Ext(file.Path))
 	var width, height int
 	if strings.HasPrefix(mimeType, "image") {
 		width, height = e.getImageWidthAndHeight(file.Path)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
+		return nil, errors.Wrap(err, "unmarshal self-driving payload.json")
+	}
+	payloadVal := func(name string) string {
+		s, ok := payload[name].(string)
+		if !ok {
+			return ""
+		}
+		return s
 	}
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -40,12 +52,12 @@ func (e *Engine) newRequestFromFile(processURL string, file selfdriving.File) (*
 	_ = w.WriteField("endOffsetMS", "0")
 	_ = w.WriteField("width", strconv.Itoa(width))
 	_ = w.WriteField("height", strconv.Itoa(height))
-	_ = w.WriteField("libraryId", "")            // not supported
-	_ = w.WriteField("libraryEngineModelId", "") // not supported
-	_ = w.WriteField("cacheURI", "")             // not supported
-	_ = w.WriteField("veritoneApiBaseUrl", "")   // not supported
-	_ = w.WriteField("token", "")                // not supported
-	_ = w.WriteField("payload", "")              // not supported
+	_ = w.WriteField("libraryId", payloadVal("libraryId"))
+	_ = w.WriteField("libraryEngineModelId", payloadVal("libraryEngineModelId"))
+	_ = w.WriteField("cacheURI", payloadVal("cacheURI"))
+	_ = w.WriteField("veritoneApiBaseUrl", payloadVal("veritoneApiBaseUrl"))
+	_ = w.WriteField("token", payloadVal("token"))
+	_ = w.WriteField("payload", string(payloadJSON))
 	chunk, err := w.CreateFormFile("chunk", "chunk.data")
 	if err != nil {
 		return nil, err
