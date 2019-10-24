@@ -7,6 +7,7 @@ import (
 	"time"
 	"os"
 	"github.com/veritone/engine-toolkit/engine/processing"
+	"net/http"
 )
 
 const (
@@ -164,6 +165,10 @@ type ControllerUniverse struct {
 
 	// still need this
 	producer      processing.Producer
+	kafkaChunkTopic string
+	webhookConfig processing.Webhooks
+
+	webhookClient *http.Client
 
 	priorTimestamp int64
 }

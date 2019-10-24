@@ -11,7 +11,18 @@ import (
 
 	"time"
 	"github.com/Shopify/sarama"
-
+/*
+	"github.com/pkg/errors"
+	"net/http"
+	"bytes"
+	"io"
+	"strings"
+	"mime"
+	"mime/multipart"
+	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
+	"io/ioutil"
+*/
+	"net/http"
 )
 
 //here's what going to happen
@@ -45,7 +56,8 @@ type ExternalEngineHandler struct {
 	// kafka stuff
 	producer	processing.Producer
 	kafkaChunkTopic string
-
+	webhookConfig processing.Webhooks
+	webhookClient *http.Client
 }
 
 func NewExternalEngineHandler (payloadJSON string,
@@ -55,7 +67,8 @@ func NewExternalEngineHandler (payloadJSON string,
 	inputIO []scfsio.LocalSCFSIOInput,
 	outputIO []scfsio.LocalSCFSIOOutput,
 		producer processing.Producer,
-		kafkaChunkTopic string) (res worker.Worker, err error){
+		kafkaChunkTopic string,
+			webhookConfig processing.Webhooks) (res worker.Worker, err error){
 	return &ExternalEngineHandler{
 		engineInstanceId:engineInstanceId,
 		engineId: workItem.EngineId,
@@ -67,6 +80,7 @@ func NewExternalEngineHandler (payloadJSON string,
 
 		producer: producer,
 		kafkaChunkTopic: kafkaChunkTopic,
+		webhookConfig: webhookConfig,
 	}, nil
 }
 
@@ -187,12 +201,13 @@ write a chunk + userMetadata =
 			 log.Printf("IGNORE .. failed to send final chunk update to Kafka:", err)
 		 }
 	 }()
-	 //ignoreChunk := false
-	 /** TODO to be continued
+	 /*
+	 ignoreChunk := false
+	 /// TODO to be continued
 	 retry := processing.NewDoubleTimeBackoff(
-		 e.Config.Webhooks.Backoff.InitialBackoffDuration,
-		 e.Config.Webhooks.Backoff.MaxBackoffDuration,
-		 e.Config.Webhooks.Backoff.MaxRetries,
+		 e.webhookConfig.Backoff.InitialBackoffDuration,
+		 e.webhookConfig.Backoff.MaxBackoffDuration,
+		 e.webhookConfig.Backoff.MaxRetries,
 	 )
 	 var content string
 	 err := retry.Do(func() error {
