@@ -55,7 +55,9 @@ A typical `payload.json` file might look like this:
 }
 ```
 
-* Some values will be directly available in the HTTP request made to the Process webhook, for others you will need to unmarshal the `payload` field (which will contain the contents of the `payload.json` file from the input folder).
+Some values will be directly available in the HTTP request made to the Process webhook,
+for others the user will need to unmarshal the `payload` field (which will contain the 
+contents of the `payload.json` file from the input folder).
 
 ## More information
 
