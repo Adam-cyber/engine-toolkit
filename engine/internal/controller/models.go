@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 	"os"
+	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
 const (
@@ -63,6 +64,7 @@ type VeritoneControllerConfig struct {
 	ControllerMode       bool   `json:"controllerMode"`
 	ControllerUrl        string `json:"controllerUrl"`
 	HostId               string `json:"hostId"`
+	LaunchId			 string `json:"launchId"`
 	SkipOutputToKafka    bool   `json:"skipOutputToKafka"`
 	Token                string `json:"token"`
 	UpdateStatusInterval string `json:"updateStatusInterval"`
@@ -77,6 +79,12 @@ type VeritoneControllerConfig struct {
 
 	// GraphQL
 	GraphQLTimeoutDuration string `json:"graphqlTimeoutDuration"`
+
+	// Kafka
+	Kafka processing.Kafka
+	//copied from engine
+	Webhooks processing.Webhooks
+
 }
 
 func (c *VeritoneControllerConfig) String() string {
@@ -122,6 +130,10 @@ func (c *VeritoneControllerConfig) SetDefaults() {
 	if c.HostId == "" {
 		c.HostId = os.Getenv("HOST_ID")
 	}
+
+	if c.Kafka.ChunkTopic=="" {
+		c.Kafka.ChunkTopic = "chunk_all"
+	}
 }
 
 type ControllerUniverse struct {
@@ -149,6 +161,9 @@ type ControllerUniverse struct {
 	batchLock                       sync.Mutex
 	curWorkItemsInABatch            []controllerClient.EngineInstanceWorkItem
 	curTaskStatusUpdatesForTheBatch []controllerClient.TaskStatusUpdate
+
+	// still need this
+	producer      processing.Producer
 
 	priorTimestamp int64
 }

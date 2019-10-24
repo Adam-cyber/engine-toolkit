@@ -389,7 +389,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		_, _, err := e.producer.SendMessage(&sarama.ProducerMessage{
 			Topic: e.Config.Kafka.ChunkTopic,
 			Key:   sarama.ByteEncoder(msg.Key),
-			Value: newJSONEncoder(finalUpdateMessage),
+			Value: processing.NewJSONEncoder(finalUpdateMessage),
 		})
 		if err != nil {
 			e.logDebug("WARN", "failed to send final chunk update:", err)
@@ -403,7 +403,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 		})
 	}()
 	ignoreChunk := false
-	retry := newDoubleTimeBackoff(
+	retry := processing.NewDoubleTimeBackoff(
 		e.Config.Webhooks.Backoff.InitialBackoffDuration,
 		e.Config.Webhooks.Backoff.MaxBackoffDuration,
 		e.Config.Webhooks.Backoff.MaxRetries,
@@ -573,31 +573,3 @@ func (e *Engine) addProcessingTime(d time.Duration) {
 // errReadyTimeout is sent down the Ready channel if the
 // Webhooks.Ready.MaximumPollDuration is exceeded.
 var errReadyTimeout = errors.New("ready: maximum duration exceeded")
-
-// jsonEncoder encodes JSON.
-type jsonEncoder struct {
-	v    interface{}
-	once sync.Once
-	b    []byte
-	err  error
-}
-
-func newJSONEncoder(v interface{}) sarama.Encoder {
-	return &jsonEncoder{v: v}
-}
-
-func (j *jsonEncoder) encode() {
-	j.once.Do(func() {
-		j.b, j.err = json.Marshal(j.v)
-	})
-}
-
-func (j *jsonEncoder) Encode() ([]byte, error) {
-	j.encode()
-	return j.b, j.err
-}
-
-func (j *jsonEncoder) Length() int {
-	j.encode()
-	return len(j.b)
-}

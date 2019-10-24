@@ -1,11 +1,11 @@
-package main
+package processing
 
 import (
 	"log"
 	"time"
 )
 
-type retrier interface {
+type Retrier interface {
 	// Do executes the function doing retries in case it returns an error
 	Do(f func() error) error
 }
@@ -21,7 +21,7 @@ type doubleTimeBackoff struct {
 // initialBackoff is minimal time to wait for the next call
 // maxBackoff is the maximum time between calls, if is 0 there is no maximum
 // maxCalls is the maximum number of calls to the function, if is 0 there is no maximum
-func newDoubleTimeBackoff(initialBackoff, maxBackoff time.Duration, maxCalls int) retrier {
+func NewDoubleTimeBackoff(initialBackoff, maxBackoff time.Duration, maxCalls int) Retrier {
 	if initialBackoff == 0 {
 		initialBackoff = 100 * time.Millisecond
 	}

@@ -13,8 +13,21 @@ import (
 	"strings"
 	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"github.com/veritone/realtime/modules/engines"
+	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
+
+func getOsEnvironmentMap () map[string]interface{} {
+	res := make (map[string]interface{})
+	for _, envString :=range os.Environ() {
+		// envString:  name=value
+		firstEqual:=strings.Index(envString, "=")
+		name := envString[0:firstEqual]
+		value:= envString[firstEqual+1:]
+		res[name] = value
+	}
+	return res
+}
 func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion, etBuildTime, etBuildTag string) (*ControllerUniverse, error) {
 	engineToolkitBuildLabel := fmt.Sprintf("Veritone Engine Toolkit:%s-%s,%s", etVersion, etBuildTag, etBuildTime)
 
@@ -29,7 +42,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 	containerStatus.ContainerId, containerStatus.LaunchTimestamp = getInitialContainerStatus()
 	correlationId := fmt.Sprintf("EngineToolkit_Host:%s,ContainerId:%s", controllerConfig.HostId, containerStatus.ContainerId)
 	engineInstanceInfo := controllerClient.EngineInstanceInfo{
-		LaunchId:                 getEnvOrGenGuid("LAUNCH_ID", "", false),
+		LaunchId:                 controllerConfig.LaunchId,
 		EngineId:                 getEnvOrGenGuid("ENGINE_ID", "", true),
 		BuildLabel:               engineToolkitBuildLabel,
 		EngineToolkitVersion:     etVersion,
@@ -38,7 +51,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 		DockerContainerID:        containerStatus.ContainerId,
 		RuntimeExpirationSeconds: controllerConfig.ProcessingTTLInSeconds,
 		LicenseExpirationSeconds: controllerConfig.LicenseExpirationInSeconds,
-		LaunchEnvVariables:       map[string]interface{}{"VERITONE_CONTROLLER_CONFIG_JSON": os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")},
+		LaunchEnvVariables:       getOsEnvironmentMap(),
 		LaunchStatus:             "active",
 		LaunchStatusInfo:         "OK",
 	}
@@ -51,6 +64,12 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 		context.WithValue(ctx, controllerClient.ContextAccessToken, controllerConfig.Token),
 		engineInstanceInfo,
 		headerOpts)
+
+	// TODO MAY NOT NEED THIS
+	var producer processing.Producer
+	if !controllerConfig.SkipOutputToKafka {
+		producer, err = processing.NewKafkaProducer(controllerConfig.Kafka.Brokers)
+	}
 	if err == nil {
 		log.Println("Registering response: ", util.ToPlainString(engineInstanceRegistrationInfo))
 		return &ControllerUniverse{
@@ -65,6 +84,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 			curContainerStatus:             containerStatus,
 			curHostAction:                  hostActionRunning,
 			curEngineMode:                  engineModeIdle,
+			producer: producer,
 		}, nil
 	}
 	return nil, errors.Wrapf(err, "Failed to register engine instance with controller at %s", controllerConfig.ControllerUrl)

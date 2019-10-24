@@ -131,13 +131,13 @@ func hash(text string) string {
 func getImageWidthAndHeight(filename string) (int, int) {
 	f, err := os.Open(filename)
 	if err != nil {
-//todo		e.logDebug("getImageWidthAndHeight: cannot open file:", err)
+		//todo		e.logDebug("getImageWidthAndHeight: cannot open file:", err)
 		return 0, 0
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-//todo		e.logDebug("getImageWidthAndHeight: cannot decode image:", err)
+		//todo		e.logDebug("getImageWidthAndHeight: cannot decode image:", err)
 		return 0, 0
 	}
 	b := img.Bounds()

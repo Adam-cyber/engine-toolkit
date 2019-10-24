@@ -75,16 +75,7 @@ func run(ctx context.Context) error {
 		} else {
 			skipKafka = true
 			// check on the producing side
-			// TODO MAY NOT NEED THIS
 
-			if !eng.Config.ControllerConfig.SkipOutputToKafka {
-				eng.producer, err = processing.NewKafkaProducer(eng.Config.Kafka.Brokers)
-				if err != nil {
-					return errors.Wrap(err, "kafka producer")
-				}
-				// use the same producer for events
-				eng.eventProducer = eng.producer
-			}
 		}
 	}
 	if !skipKafka {
