@@ -1,16 +1,28 @@
-package main
+// ADDED BY DROP - https://github.com/matryer/drop (v0.7)
+//  source: github.com/dahernan/backoff (16994679f40f16943ebe2f96cb96aa9c89913f1a)
+//  update: drop -f github.com/dahernan/backoff
+// license: Apache License (see repo for details)
+
+package backoff
 
 import (
+	"context"
+	"errors"
 	"log"
 	"time"
 )
 
-type retrier interface {
+// ErrAbort indicates that the backoff should abort.
+var ErrAbort = errors.New("abored")
+
+// Retrier runs code many times.
+type Retrier interface {
 	// Do executes the function doing retries in case it returns an error
-	Do(f func() error) error
+	Do(ctx context.Context, f func() error) error
 }
 
-type doubleTimeBackoff struct {
+// DoubleTimeBackoff provides backoff functionality.
+type DoubleTimeBackoff struct {
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
 	maxCalls       int
@@ -21,24 +33,25 @@ type doubleTimeBackoff struct {
 // initialBackoff is minimal time to wait for the next call
 // maxBackoff is the maximum time between calls, if is 0 there is no maximum
 // maxCalls is the maximum number of calls to the function, if is 0 there is no maximum
-func newDoubleTimeBackoff(initialBackoff, maxBackoff time.Duration, maxCalls int) retrier {
+func NewDoubleTimeBackoff(initialBackoff, maxBackoff time.Duration, maxCalls int) Retrier {
 	if initialBackoff == 0 {
 		initialBackoff = 100 * time.Millisecond
 	}
-	return &doubleTimeBackoff{
+	return &DoubleTimeBackoff{
 		initialBackoff: initialBackoff,
 		maxBackoff:     maxBackoff,
 		maxCalls:       maxCalls,
 	}
 }
 
-func (b *doubleTimeBackoff) Do(f func() error) error {
+// Do executes the function using the specified rules.
+func (b *DoubleTimeBackoff) Do(ctx context.Context, f func() error) error {
 	backoff := time.Duration(0)
 	calls := 0
 	for {
 		err := f()
-		if err == nil {
-			return nil
+		if err == nil || err == ErrAbort {
+			return err
 		}
 		calls++
 		if (calls >= b.maxCalls) && (b.maxCalls != 0) {
@@ -52,7 +65,7 @@ func (b *doubleTimeBackoff) Do(f func() error) error {
 		default:
 			backoff *= 2
 		}
-		log.Printf("[backoff %v] Retry after %v due to the Error: %v\n", calls, backoff, err)
+		log.Printf("[backoff %d/%d] waiting %v: %v\n", calls, b.maxCalls, backoff, err)
 		time.Sleep(backoff)
 	}
 }
