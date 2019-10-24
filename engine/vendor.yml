@@ -106,7 +106,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: fa96d6ddd0426485f5bb23575132e7f703a8b37a
 - path: github.com/veritone/realtime
-  rev: c6381c7aedb181939eb34d576f275014c35cb812
+  rev: 6e71b77b7c48b559a659ea8185035679f1d3eaf1
 - path: github.com/veritone/webstream-adapter
   rev: 53ce102647f497de34d3125f0ac823d390f20a4e
 - path: go.uber.org/atomic

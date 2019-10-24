@@ -160,3 +160,9 @@ push-ffmpeg:
 	docker tag $(SIV2_FFMPEG_IMAGE) $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
 	docker push $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
 
+#---------------------
+# Special target
+BUILD_ID=991914e9-91af-4f91-9fb2-ab527a5624cc
+push-tv-to-dev:
+	docker tag tv-and-radio-adapter 026972849384.dkr.ecr.us-east-1.amazonaws.com/dev-validated:74dfd76b-472a-48f0-8395-c7e01dd7fd24-$(BUILD_ID)
+	docker push 026972849384.dkr.ecr.us-east-1.amazonaws.com/dev-validated:74dfd76b-472a-48f0-8395-c7e01dd7fd24-$(BUILD_ID)
