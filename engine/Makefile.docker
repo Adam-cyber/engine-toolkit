@@ -22,7 +22,9 @@ SIV2_PLAYBACK_IMAGE = siv2-playback
 SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
-build-all: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
+#build-all: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
+build-base: build-engine-base-docker build-base-docker
+build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
 
 #build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
 

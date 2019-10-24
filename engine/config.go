@@ -104,7 +104,7 @@ func NewConfig() Config {
 		c.Engine.EndIfIdleDuration = 1 * time.Minute
 	}
 	// kafka configuration
-	c.Kafka.Brokers = strings.Split(os.Getenv("AIWARE_KAFKA_BROKERS"), ",")
+	c.Kafka.Brokers = strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	c.Kafka.ConsumerGroup = os.Getenv("KAFKA_CONSUMER_GROUP")
 	c.Kafka.InputTopic = os.Getenv("KAFKA_INPUT_TOPIC")
 	c.Kafka.ChunkTopic = os.Getenv("KAFKA_CHUNK_TOPIC")
@@ -151,9 +151,15 @@ func NewConfig() Config {
 	*/
 	if os.Getenv("AIWARE_CONTROLLER") != "" {
 		// trigger on controller
+		c.ControllerConfig.ControllerMode = true
 		c.ControllerConfig.HostId = os.Getenv("AIWARE_HOST_ID")
 		c.ControllerConfig.ControllerUrl = os.Getenv("AIWARE_CONTROLLER")
 		c.ControllerConfig.LaunchId = os.Getenv("AIWARE_LAUNCH_ID")
+		c.ControllerConfig.Kafka = c.Kafka
+		// with the exception of kafka brokers we want to pick up AIWARE_KAFKA_BROKERS
+
+		c.ControllerConfig.Kafka.Brokers = strings.Split(os.Getenv("AIWARE_KAFKA_BROKERS"), ",")
+		c.ControllerConfig.SetDefaults()
 	}
 	return c
 }

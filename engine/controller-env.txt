@@ -4,6 +4,9 @@
 ##
 ## HOST_ID=d18c2f62-a145-4cb9-af1d-d9757209804b
 ##
-KAFKA_BROKERS=kafka1:9092
+AIWARE_KAFKA_BROKERS=kafka1:9092
 KAFKA_CHUNK_TOPIC=chunk_all
-VERITONE_CONTROLLER_CONFIG_JSON={ "controllerMode": true, "controllerUrl": "http://localhost:9000/edge/v1", "hostId": "d18c2f62-a145-4cb9-af1d-d9757209804b", "skipOutputToKafka": false, "token": "b1002d70-537b-4bee-bc79-0e21dcd3cccc", "updateStatusInterval": "5s", "ProcessingTTLInSeconds": 20, "licenseExpirationInSeconds": 100000, "idleWaitTimeoutInSeconds": 60, "idleQueryIntervalInSeconds": 5, "graphqlTimeoutDuration": "" }
+AIWARE_CONTROLLER=http://localhost:9000/edge/v1
+AIWARE_HOST_ID=d18c2f62-a145-4cb9-af1d-d9757209804b
+AIWARE_LAUNCH_ID=d18c2f62-a145-4cb9-af1d-d9757209804b
+
