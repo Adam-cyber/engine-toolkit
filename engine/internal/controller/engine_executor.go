@@ -69,8 +69,13 @@ func (e *ExternalEngineHandler) Run (ctx context.Context) (errReason worker.Erro
 		// got to do heartbeat here baby
 		go e.startHeartbeat(ctx)
 	}
-	panic ("To be implemented")
 
+	/**
+	we have work item.
+	we have IO for input/output
+	we have directive to process N chunks
+	// do we want to handle stream engine here? not so since it will involev
+	 */
 	return errReason
 }
 

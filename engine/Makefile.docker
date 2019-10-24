@@ -22,8 +22,10 @@ SIV2_PLAYBACK_IMAGE = siv2-playback
 SIV2_FFMPEG_IMAGE = siv2-ffmpeg
 SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
 
-#build-all-engines: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
-build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
+build-all: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
+
+#build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
+
 push-all: push-wsa push-tvr push-playback push-asset push-ffmpeg
 
 ## set up a base Docker with ffmpeg, mime-support, streamlink
@@ -139,15 +141,19 @@ ENV_VDA=$(DEV_VDA)
 push-wsa:
 	docker tag $(WSA_IMAGE) $(ENV_VDA)/$(WSA_IMAGE)
 	docker push $(ENV_VDA)/$(WSA_IMAGE)
+
 push-tvr:
 	docker tag $(TVR_IMAGE) $(ENV_VDA)/$(TVR_IMAGE)
 	docker push $(ENV_VDA)/$(TVR_IMAGE)
+
 push-playback:
 	docker tag $(SIV2_PLAYBACK_IMAGE) $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
 	docker push $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
+
 push-asset:
 	docker tag $(SIV2_ASSET_CREATOR_IMAGE) $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
 	docker push $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
+
 push-ffmpeg:
 	docker tag $(SIV2_FFMPEG_IMAGE) $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
 	docker push $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)

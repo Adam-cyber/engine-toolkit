@@ -171,8 +171,8 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	var (
 		wrk  worker.Worker
 	    workItemStatusManager, _ = util.GetWorkItemStatusManager(curStatus, &c.batchLock)
-	    inputIOs, _ = util.GetIOInputsForWorkItem(curWorkItem)
-	    outputIOs, _ = util.GetIOOutputsForWorkItem(curWorkItem)
+	    inputIOs, _ = util.GetIOInputsForWorkItem(curWorkItem, c.engineInstanceId)
+	    outputIOs, _ = util.GetIOOutputsForWorkItem(curWorkItem, c.engineInstanceId)
 	)
 	switch curWorkItem.EngineId {
 	case engines.EngineIdTVRA:
