@@ -1,1 +1,1 @@
-make -f makefile.docker $@
+make -f Makefile.docker $@
