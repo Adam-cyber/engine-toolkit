@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/veritone/engine-toolkit/engine/internal/controller"
-	"github.com/veritone/engine-toolkit/engine/processing"
+	"github.com/veritone/realtime/modules/engines/toolkit/controller"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 	"io"
 	"log"
 	"os"

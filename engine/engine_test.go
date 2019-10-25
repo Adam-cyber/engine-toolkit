@@ -15,6 +15,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/matryer/is"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 )
 
 // TestProcessingChunk tests the entire end to end flow of processing
@@ -30,11 +31,11 @@ func TestProcessingChunk(t *testing.T) {
 	engine.logDebug = func(args ...interface{}) {
 		log.Println(args...)
 	}
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
-	outputEventsPipe := newPipe()
+	outputEventsPipe := processing.NewPipe()
 	defer outputEventsPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe
@@ -65,10 +66,10 @@ func TestProcessingChunk(t *testing.T) {
 		err := engine.Run(ctx)
 		is.NoErr(err)
 	}()
-	inputMessage := mediaChunkMessage{
+	inputMessage := processing.MediaChunkMessage{
 		TimestampUTC:  time.Now().Unix(),
 		ChunkUUID:     "123",
-		Type:          messageTypeMediaChunk,
+		Type:          processing.MessageTypeMediaChunk,
 		StartOffsetMS: 1000,
 		EndOffsetMS:   2000,
 		JobID:         "job1",
@@ -78,12 +79,12 @@ func TestProcessingChunk(t *testing.T) {
 	_, _, err := inputPipe.SendMessage(&sarama.ProducerMessage{
 		Offset: 1,
 		Key:    sarama.StringEncoder(inputMessage.TaskID),
-		Value:  newJSONEncoder(inputMessage),
+		Value:  processing.NewJSONEncoder(inputMessage),
 	})
 	is.NoErr(err)
 
 	var outputMsg *sarama.ConsumerMessage
-	var chunkResult chunkResult
+	var chunkResult processing.ChunkResult
 
 	// read the chunk success message
 	select {
@@ -97,12 +98,12 @@ func TestProcessingChunk(t *testing.T) {
 	err = json.Unmarshal(outputMsg.Value, &chunkResult)
 	is.NoErr(err)
 	is.Equal(chunkResult.ErrorMsg, "")
-	is.Equal(chunkResult.Type, messageTypeChunkResult)
+	is.Equal(chunkResult.Type, processing.MessageTypeChunkResult)
 	is.Equal(chunkResult.TaskID, inputMessage.TaskID)
 	is.Equal(chunkResult.ChunkUUID, inputMessage.ChunkUUID)
-	is.Equal(chunkResult.Status, chunkStatusSuccess)
+	is.Equal(chunkResult.Status, processing.ChunkStatusSuccess)
 
-	is.Equal(chunkResult.EngineOutput.Type, messageTypeEngineOutput)
+	is.Equal(chunkResult.EngineOutput.Type, processing.MessageTypeEngineOutput)
 	is.Equal(chunkResult.EngineOutput.TaskID, inputMessage.TaskID)
 	is.Equal(chunkResult.EngineOutput.ChunkUUID, inputMessage.ChunkUUID)
 	is.Equal(chunkResult.EngineOutput.StartOffsetMS, 1000)
@@ -146,7 +147,7 @@ func TestProcessingChunk(t *testing.T) {
 	is.Equal(evt.Event, eventStop) // event name
 }
 
-func popEvent(t *testing.T, outputEventsPipe *pipe) (*sarama.ConsumerMessage, *edgeEvent) {
+func popEvent(t *testing.T, outputEventsPipe *processing.Pipe) (*sarama.ConsumerMessage, *edgeEvent) {
 	is := is.New(t)
 	var evt edgeEvent
 	var eventMsg *sarama.ConsumerMessage
@@ -171,9 +172,9 @@ func TestProcessingChunkError(t *testing.T) {
 	engine.Config.Kafka.ChunkTopic = "chunk-topic"
 	engine.Config.Webhooks.Backoff.MaxRetries = 1
 	engine.logDebug = func(args ...interface{}) {}
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe
@@ -193,10 +194,10 @@ func TestProcessingChunkError(t *testing.T) {
 		err := engine.Run(ctx)
 		is.NoErr(err)
 	}()
-	inputMessage := mediaChunkMessage{
+	inputMessage := processing.MediaChunkMessage{
 		TimestampUTC:  time.Now().Unix(),
 		ChunkUUID:     "123",
-		Type:          messageTypeMediaChunk,
+		Type:          processing.MessageTypeMediaChunk,
 		StartOffsetMS: 1000,
 		EndOffsetMS:   2000,
 		JobID:         "job1",
@@ -206,12 +207,12 @@ func TestProcessingChunkError(t *testing.T) {
 	_, _, err := inputPipe.SendMessage(&sarama.ProducerMessage{
 		Offset: 1,
 		Key:    sarama.StringEncoder(inputMessage.TaskID),
-		Value:  newJSONEncoder(inputMessage),
+		Value:  processing.NewJSONEncoder(inputMessage),
 	})
 	is.NoErr(err)
 
 	var outputMsg *sarama.ConsumerMessage
-	var chunkResult chunkResult
+	var chunkResult processing.ChunkResult
 
 	// read the chunk success message
 	select {
@@ -225,10 +226,10 @@ func TestProcessingChunkError(t *testing.T) {
 	err = json.Unmarshal(outputMsg.Value, &chunkResult)
 	is.NoErr(err)
 	is.Equal(chunkResult.ErrorMsg, "500: Something went wrong")
-	is.Equal(chunkResult.Type, messageTypeChunkResult)
+	is.Equal(chunkResult.Type, processing.MessageTypeChunkResult)
 	is.Equal(chunkResult.TaskID, inputMessage.TaskID)
 	is.Equal(chunkResult.ChunkUUID, inputMessage.ChunkUUID)
-	is.Equal(chunkResult.Status, chunkStatusError)
+	is.Equal(chunkResult.Status, processing.ChunkStatusError)
 	is.Equal(chunkResult.FailureReason, "internal_error")
 	is.Equal(chunkResult.FailureMsg, "500: Something went wrong")
 	is.True(chunkResult.EngineOutput == nil)
@@ -299,9 +300,9 @@ func TestSubprocess(t *testing.T) {
 
 	engine := NewEngine()
 	engine.Config.Subprocess.Arguments = []string{"echo", "-n", "something"}
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe
@@ -326,9 +327,9 @@ func TestEndIfIdleDuration(t *testing.T) {
 	engine := NewEngine()
 	engine.Config.Subprocess.Arguments = []string{} // no subprocess
 	engine.Config.Engine.EndIfIdleDuration = 100 * time.Millisecond
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe
@@ -366,9 +367,9 @@ func TestIgnoredChunks(t *testing.T) {
 	engine.Config.Subprocess.Arguments = []string{} // no subprocess
 	engine.Config.Kafka.ChunkTopic = "chunk-topic"
 	engine.logDebug = func(args ...interface{}) {}
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe
@@ -389,10 +390,10 @@ func TestIgnoredChunks(t *testing.T) {
 		is.NoErr(err)
 	}()
 
-	inputMessage := mediaChunkMessage{
+	inputMessage := processing.MediaChunkMessage{
 		TimestampUTC:  time.Now().Unix(),
 		ChunkUUID:     "123",
-		Type:          messageTypeMediaChunk,
+		Type:          processing.MessageTypeMediaChunk,
 		StartOffsetMS: 1000,
 		EndOffsetMS:   2000,
 		JobID:         "job1",
@@ -402,12 +403,12 @@ func TestIgnoredChunks(t *testing.T) {
 	_, _, err := inputPipe.SendMessage(&sarama.ProducerMessage{
 		Offset: 1,
 		Key:    sarama.StringEncoder(inputMessage.TaskID),
-		Value:  newJSONEncoder(inputMessage),
+		Value:  processing.NewJSONEncoder(inputMessage),
 	})
 	is.NoErr(err)
 
 	var outputMsg *sarama.ConsumerMessage
-	var chunkProcessedStatus chunkProcessedStatus
+	var chunkProcessedStatus processing.ChunkProcessedStatus
 
 	// read the chunk ignore message
 	select {
@@ -421,10 +422,10 @@ func TestIgnoredChunks(t *testing.T) {
 	err = json.Unmarshal(outputMsg.Value, &chunkProcessedStatus)
 	is.NoErr(err)
 	is.Equal(chunkProcessedStatus.ErrorMsg, "")
-	is.Equal(chunkProcessedStatus.Type, messageTypeChunkResult)
+	is.Equal(chunkProcessedStatus.Type, processing.MessageTypeChunkResult)
 	is.Equal(chunkProcessedStatus.TaskID, inputMessage.TaskID)
 	is.Equal(chunkProcessedStatus.ChunkUUID, inputMessage.ChunkUUID)
-	is.Equal(chunkProcessedStatus.Status, chunkStatusIgnored)
+	is.Equal(chunkProcessedStatus.Status, processing.ChunkStatusIgnored)
 
 	is.Equal(inputPipe.Offset, int64(1)) // Offset
 }
@@ -441,9 +442,9 @@ func TestSubprocessCrash(t *testing.T) {
 	readySrv := newOKServer()
 	defer readySrv.Close()
 	engine.Config.Webhooks.Ready.URL = readySrv.URL
-	inputPipe := newPipe()
+	inputPipe := processing.NewPipe()
 	defer inputPipe.Close()
-	outputPipe := newPipe()
+	outputPipe := processing.NewPipe()
 	defer outputPipe.Close()
 	engine.consumer = inputPipe
 	engine.producer = outputPipe

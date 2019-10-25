@@ -21,10 +21,10 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
-	"github.com/veritone/engine-toolkit/engine/internal/controller"
-	"github.com/veritone/engine-toolkit/engine/internal/selfdriving"
-	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
-	"github.com/veritone/engine-toolkit/engine/processing"
+	"github.com/veritone/realtime/modules/engines/toolkit/controller"
+	"github.com/veritone/realtime/modules/engines/toolkit/selfdriving"
+	"github.com/veritone/realtime/modules/engines/toolkit/vericlient"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 )
 
 // Engine consumes messages and calls webhooks to
