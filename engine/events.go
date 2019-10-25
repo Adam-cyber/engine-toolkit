@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/veritone/engine-toolkit/engine/processing"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 )
 
 const (

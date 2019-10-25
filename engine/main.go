@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
-	"github.com/veritone/engine-toolkit/engine/internal/controller"
-	"github.com/veritone/engine-toolkit/engine/processing"
+	"github.com/veritone/realtime/modules/engines/toolkit/controller"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 )
 
 // BuildTag is the githash of this build.

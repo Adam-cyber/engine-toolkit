@@ -1,5 +1,0 @@
--- Use this to create output writer as an engine in different env
-
-INSERT INTO "job_new"."engine"("engine_id","engine_name","engine_description","engine_category_id","engine_state","deployment_model","owner_organization_id","is_public","price","rating","website","logo_path","order","dependency","core_job_data","fields","validation","application_id","asset","creates_recording","deleted","created_date","updated_date","library_required","icon_path","engine_currency","engine_alias_id","engine_alias_name","engine_alias_description","engine_alias_logo_path","jwt_rights","use_cases","industries","engine_manifest")
-VALUES
-(E'8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3',E'Output Writer',E'Engine used to aggregate engine outputs and produce a final output',E'925e8039-5246-4ced-9f2b-b456d0b57ea1',E'pending',0,7682,FALSE,NULL,NULL,NULL,E'https://www.filepicker.io/api/file/p2bLdy4nRrOwv34yoEhg',NULL,NULL,E'{"category": "ingestion"}',E'[]',NULL,NULL,NULL,TRUE,FALSE,1528493221,1528493221,FALSE,NULL,E'USD',E'8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3',NULL,NULL,NULL,NULL,NULL,NULL,NULL);
