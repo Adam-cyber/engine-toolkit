@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
 const (
@@ -70,7 +71,7 @@ func (e *Engine) sendEvent(evt event) {
 	_, _, err := e.eventProducer.SendMessage(&sarama.ProducerMessage{
 		Topic: e.Config.Kafka.EventTopic,
 		Key:   sarama.ByteEncoder(evt.Key),
-		Value: newJSONEncoder(edgeEvt),
+		Value: processing.NewJSONEncoder(edgeEvt),
 	})
 	if err != nil {
 		e.logDebug("WARN", "failed to produce engine event:", err, evt)

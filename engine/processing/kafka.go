@@ -1,4 +1,4 @@
-package main
+package processing
 
 import (
 	"encoding/json"
@@ -29,7 +29,7 @@ type Producer interface {
 	SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error)
 }
 
-func newKafkaConsumer(brokers []string, group, topic string) (Consumer, func(), error) {
+func NewKafkaConsumer(brokers []string, group, topic string) (Consumer, func(), error) {
 	cleanup := func() {}
 	config := cluster.NewConfig()
 	config.Version = sarama.V1_1_0_0
@@ -66,7 +66,7 @@ func newKafkaConsumer(brokers []string, group, topic string) (Consumer, func(), 
 	return consumer, cleanup, nil
 }
 
-func newKafkaProducer(brokers []string) (Producer, error) {
+func NewKafkaProducer(brokers []string) (Producer, error) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V1_1_0_0
 	config.Producer.Return.Successes = true
@@ -84,8 +84,8 @@ func newKafkaProducer(brokers []string) (Producer, error) {
 	return producer, nil
 }
 
-type mediaChunkMessage struct {
-	Type          messageType     `json:"type"`
+type MediaChunkMessage struct {
+	Type          MessageType     `json:"type"`
 	TimestampUTC  int64           `json:"timestampUTC"`
 	MIMEType      string          `json:"mimeType"`
 	TaskID        string          `json:"taskId"`
@@ -104,7 +104,7 @@ type mediaChunkMessage struct {
 
 // unmarshalPayload unmarshals the TaskPayload into the known
 // fields (in the payload type). This will ignore custom fields.
-func (m *mediaChunkMessage) unmarshalPayload() (payload, error) {
+func (m *MediaChunkMessage) UnmarshalPayload() (payload, error) {
 	var p payload
 	if err := json.Unmarshal(m.TaskPayload, &p); err != nil {
 		return p, err
@@ -113,29 +113,29 @@ func (m *mediaChunkMessage) unmarshalPayload() (payload, error) {
 }
 
 // messageType is an enum type for edge message types.
-type messageType string
+type MessageType string
 
 // chunkStatus is an enum type for chunk statuses.
 type chunkStatus string
 
 const (
-	messageTypeChunkResult  messageType = "chunk_result"
-	messageTypeMediaChunk   messageType = "media_chunk"
-	messageTypeEngineOutput messageType = "engine_output"
+	MessageTypeChunkResult  MessageType = "chunk_result"
+	MessageTypeMediaChunk   MessageType = "media_chunk"
+	MessageTypeEngineOutput MessageType = "engine_output"
 )
 
 const (
 	// chunkStatusSuccess is status to report when input chunk processed successfully
-	chunkStatusSuccess chunkStatus = "SUCCESS"
+	ChunkStatusSuccess chunkStatus = "SUCCESS"
 	// chunkStatusError is status to report when input chunk was processed with error
-	chunkStatusError chunkStatus = "ERROR"
+	ChunkStatusError chunkStatus = "ERROR"
 	// chunkStatusIgnored is status to report when input chunk was ignored and not attempted processing (i.e. not of the expected type)
-	chunkStatusIgnored chunkStatus = "IGNORED"
+	ChunkStatusIgnored chunkStatus = "IGNORED"
 )
 
 // chunkProcessedStatus - processing status of a chunk by stateless engines/conductors
 type chunkProcessedStatus struct {
-	Type         messageType `json:"type,omitempty"`
+	Type         MessageType `json:"type,omitempty"`
 	TimestampUTC int64       `json:"timestampUTC,omitempty"`
 	TaskID       string      `json:"taskId,omitempty"`
 	ChunkUUID    string      `json:"chunkUUID,omitempty"`
@@ -144,14 +144,14 @@ type chunkProcessedStatus struct {
 	InfoMsg      string      `json:"infoMsg,omitempty"`
 }
 
-type chunkResult struct {
-	Type         messageType        `json:"type,omitempty"`
+type ChunkResult struct {
+	Type         MessageType        `json:"type,omitempty"`
 	TimestampUTC int64              `json:"timestampUTC,omitempty"`
 	TaskID       string             `json:"taskId,omitempty"`
 	ChunkUUID    string             `json:"chunkUUID,omitempty"`
 	Status       chunkStatus        `json:"status,omitempty"`
 	InfoMsg      string             `json:"infoMsg,omitempty"`
-	EngineOutput *mediaChunkMessage `json:"engineOutput,omitempty"`
+	EngineOutput *MediaChunkMessage `json:"engineOutput,omitempty"`
 
 	ErrorMsg      string `json:"errorMsg,omitempty"`
 	FailureReason string `json:"failureReason,omitempty"`

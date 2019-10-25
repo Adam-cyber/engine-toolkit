@@ -1,4 +1,4 @@
-package main
+package processing
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ func TestNewRequestFromMediaChunk(t *testing.T) {
 		is.NoErr(err)
 	}))
 	defer fileSrv.Close()
-	msg := mediaChunkMessage{
+	msg := MediaChunkMessage{
 		CacheURI:      fileSrv.URL,
 		MIMEType:      "application/test",
 		ChunkIndex:    1,
@@ -93,7 +93,7 @@ func TestNewRequestFromMediaChunkDisableChunkDownload(t *testing.T) {
 		is.Fail() // should not get called
 	}))
 	defer fileSrv.Close()
-	msg := mediaChunkMessage{
+	msg := MediaChunkMessage{
 		CacheURI:      fileSrv.URL,
 		MIMEType:      "application/test",
 		ChunkIndex:    1,

@@ -1,4 +1,4 @@
-package main
+package processing
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 func TestMediaChunkMessagePayload(t *testing.T) {
 	is := is.New(t)
 
-	var m mediaChunkMessage
+	var m MediaChunkMessage
 	src := `{
 		"jobId": "JobID",
 		"taskPayload": {

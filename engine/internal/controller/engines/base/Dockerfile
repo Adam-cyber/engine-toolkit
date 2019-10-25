@@ -3,7 +3,9 @@
 ## this is actually can be a long process, and thus built once reuse many
 FROM jrottenberg/ffmpeg:4.1-ubuntu
 RUN apt-get update \
-    && apt-get install -y ca-certificates python3 mime-support streamlink \
+    && apt-get install -y ca-certificates python3 mime-support python3-pip 
+# streamlink \
+RUN pip3 install --upgrade streamlink \
     && rm -rf /var/lib/apt/lists
 RUN mkdir -p /app/data
 WORKDIR /app

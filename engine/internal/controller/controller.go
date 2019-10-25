@@ -5,16 +5,51 @@ import (
 	"fmt"
 	"github.com/antihax/optional"
 	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/processing"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	"github.com/veritone/realtime/modules/engines"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"log"
+	"net/http"
 	"os"
-	"time"
 	"os/exec"
 	"strings"
-	util "github.com/veritone/realtime/modules/engines/scfsio"
-	"github.com/veritone/realtime/modules/engines"
+	"time"
 )
 
+func excludeThis(variable string) bool {
+	switch variable {
+	case "LD_LIBRARY_PATH":
+		return true
+	case "LS_COLORS":
+		return true
+	case "TERM":
+		return true
+	case "PWD":
+		return true
+	case "_":
+		return true
+	case "PATH":
+		return true
+	}
+	return false
+}
+
+func getOsEnvironmentMap() map[string]interface{} {
+	res := make(map[string]interface{})
+	for _, envString := range os.Environ() {
+		// envString:  name=value
+		firstEqual := strings.Index(envString, "=")
+		if firstEqual <= 0 {
+			continue
+		}
+		name := envString[0:firstEqual]
+		if !excludeThis(name) {
+			res[name] = envString[firstEqual+1:]
+		}
+	}
+	return res
+}
 func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion, etBuildTime, etBuildTag string) (*ControllerUniverse, error) {
 	engineToolkitBuildLabel := fmt.Sprintf("Veritone Engine Toolkit:%s-%s,%s", etVersion, etBuildTag, etBuildTime)
 
@@ -29,7 +64,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 	containerStatus.ContainerId, containerStatus.LaunchTimestamp = getInitialContainerStatus()
 	correlationId := fmt.Sprintf("EngineToolkit_Host:%s,ContainerId:%s", controllerConfig.HostId, containerStatus.ContainerId)
 	engineInstanceInfo := controllerClient.EngineInstanceInfo{
-		LaunchId:                 getEnvOrGenGuid("LAUNCH_ID", "", false),
+		LaunchId:                 controllerConfig.LaunchId,
 		EngineId:                 getEnvOrGenGuid("ENGINE_ID", "", true),
 		BuildLabel:               engineToolkitBuildLabel,
 		EngineToolkitVersion:     etVersion,
@@ -38,7 +73,7 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 		DockerContainerID:        containerStatus.ContainerId,
 		RuntimeExpirationSeconds: controllerConfig.ProcessingTTLInSeconds,
 		LicenseExpirationSeconds: controllerConfig.LicenseExpirationInSeconds,
-		LaunchEnvVariables:       map[string]interface{}{"VERITONE_CONTROLLER_CONFIG_JSON": os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")},
+		LaunchEnvVariables:       getOsEnvironmentMap(),
 		LaunchStatus:             "active",
 		LaunchStatusInfo:         "OK",
 	}
@@ -47,10 +82,23 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 
 	ctx := context.Background()
 	log.Println("Registering with Controller, url, ", controllerConfig.ControllerMode, ", instanceInfo=", util.ToPlainString(engineInstanceInfo))
-	engineInstanceRegistrationInfo, _, err := controllerApiClient.EngineApi.RegisterEngineInstance(
+	engineInstanceRegistrationInfo, resp, err := controllerApiClient.EngineApi.RegisterEngineInstance(
 		context.WithValue(ctx, controllerClient.ContextAccessToken, controllerConfig.Token),
 		engineInstanceInfo,
 		headerOpts)
+
+	if resp.StatusCode >= 400 {
+		log.Fatalf("Failed to register engine instance, Status: %d: %v", resp.StatusCode, extractMeaningfulHttpResponseError(err))
+	}
+
+	var producer processing.Producer
+	if !controllerConfig.SkipOutputToKafka {
+		var kafkaErr error
+		if producer, kafkaErr = processing.NewKafkaProducer(controllerConfig.Kafka.Brokers); kafkaErr != nil {
+			// just ignore for now
+			log.Printf("IGNORE Failure to connect to Kafka for publishing results, err=%v", kafkaErr)
+		}
+	}
 	if err == nil {
 		log.Println("Registering response: ", util.ToPlainString(engineInstanceRegistrationInfo))
 		return &ControllerUniverse{
@@ -65,6 +113,9 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 			curContainerStatus:             containerStatus,
 			curHostAction:                  hostActionRunning,
 			curEngineMode:                  engineModeIdle,
+			producer:                       producer,
+			webhookClient:                  &http.Client{ /* no timeout */ },
+			graphQLHTTPClient:              &http.Client{Timeout: 30 * time.Minute},
 		}, nil
 	}
 	return nil, errors.Wrapf(err, "Failed to register engine instance with controller at %s", controllerConfig.ControllerUrl)
@@ -96,7 +147,6 @@ func (c *ControllerUniverse) SetWorkRequestStatus(id, status, details string) {
 		c.curWorkRequestDetails = details
 	}
 }
-
 
 // =================================
 
@@ -175,4 +225,12 @@ func discoverEngines() []string {
 	res = append(res, engines.EngineIdSI2FFMPEG)
 	res = append(res, engines.EngineIdOW)
 	return res
+}
+
+func extractMeaningfulHttpResponseError(err error) string {
+	var errorMsg = err.Error()
+	if openapiErr, ok := err.(controllerClient.GenericOpenAPIError); ok {
+		errorMsg = string(openapiErr.Body())
+	}
+	return errorMsg
 }

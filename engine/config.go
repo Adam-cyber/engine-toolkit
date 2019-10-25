@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
+	"github.com/veritone/engine-toolkit/engine/processing"
 	"io"
 	"log"
 	"os"
@@ -15,80 +15,21 @@ import (
 // Config holds engine configuration settings.
 type Config struct {
 	// Engine contains engine specific configuration and information.
-	Engine struct {
-		// ID is the identifier for this engine.
-		ID string
-		// InstanceID is the instance ID for this running instance.
-		InstanceID string
-		// EndIfIdleDuration is the duration after the last message
-		// at which point the engine will shut down.
-		EndIfIdleDuration time.Duration
-	}
+	Engine processing.Engine
 	// Processing contains configuration about how the engine toolkit
 	// handles work.
-	Processing struct {
-		// Concurrency is the number of tasks to run concurrently.
-		Concurrency int
-		// DisableChunkDownload disables the automatic download of the chunk.
-		DisableChunkDownload bool
-	}
+	Processing processing.Processing
 	// Stdout is the Engine's stdout. Subprocesses inherit this.
 	Stdout io.Writer
 	// Stderr is the Engine's stderr. Subprocesses inherit this.
 	Stderr io.Writer
 	// Subprocess holds configuration relating to the subprocess
 	// that this engine supervises.
-	Subprocess struct {
-		// Arguments are the command line arguments (including the command as the
-		// first argument) for the subprocess.
-		// By default, these are taken from the arguments passed to this tool.
-		Arguments []string
-		// ReadyTimeout is the amount of time to wait before deciding that the subprocess
-		// is not going to be ready.
-		ReadyTimeout time.Duration
-	}
+	Subprocess processing.Subprocess
 	// Kafka holds Kafka configuration.
-	Kafka struct {
-		// Brokers is a list of Kafka brokers.
-		Brokers []string
-		// ConsumerGroup is the group name of the consumers.
-		ConsumerGroup string
-		// InputTopic is the topic on which chunks are received.
-		InputTopic string
-		// ChunkTopic is the output topic where chunk results are sent.
-		ChunkTopic string
-		// EventTopic is the topic to push events like metrics and timing information
-		EventTopic string
-	}
+	Kafka processing.Kafka
 	// Webhooks holds webhook addresses.
-	Webhooks struct {
-		// Ready holds configuration for the readiness webhook.
-		Ready struct {
-			// URL is the address of the Readiness Webhook.
-			URL string
-			// PollDuration is how often the URL will be polled to check
-			// for readiness before processing begins.
-			PollDuration time.Duration
-			// MaximumPollDuration is the maximum of time to allow for the
-			// engine to become ready before abandoning the operation altogether.
-			MaximumPollDuration time.Duration
-		}
-		// Process holds configuration for the processing webhook.
-		Process struct {
-			// URL is the address of the Processing Webhook.
-			URL string
-		}
-		// Backoff controls webhook backoff and retry policy.
-		Backoff struct {
-			// MaxRetries is the maximum number of retries that will be made before
-			// giving up.
-			MaxRetries int
-			// InitialBackoffDuration is the time to wait before the first retry.
-			InitialBackoffDuration time.Duration
-			// MaxBackoffDuration is the maximum amount of time to wait before retrying.
-			MaxBackoffDuration time.Duration
-		}
-	}
+	Webhooks processing.Webhooks
 	// Events contains system event configuration.
 	Events struct {
 		// PeriodicUpdateDuration is the interval at which to
@@ -193,15 +134,35 @@ func NewConfig() Config {
 	}
 
 	// controller mode
+	/** TODO pick up from realtime/config .. for now we'll just pick up a few
 	controllerConfig := os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")
 	if controllerConfig != "" {
 		// deserialize it
 		err := json.Unmarshal([]byte(controllerConfig), &c.ControllerConfig)
 		if err == nil {
+			c.ControllerConfig.Kafka = c.Kafka   // propagate the config here..
+			c.ControllerConfig.Webhooks = c.Webhooks
 			c.ControllerConfig.SetDefaults()
 		} else {
+			log.Printf("Unable to unmarshal VERITONE_CONTROLLER_CONFIG_JSON, err=%v", err)
 			c.ControllerConfig.ControllerMode = false
 		}
+	}
+	*/
+	if os.Getenv("AIWARE_CONTROLLER") != "" {
+		// trigger on controller
+		c.ControllerConfig.ControllerMode = true
+		c.ControllerConfig.HostId = os.Getenv("AIWARE_HOST_ID")
+		c.ControllerConfig.ControllerUrl = os.Getenv("AIWARE_CONTROLLER")
+		c.ControllerConfig.LaunchId = os.Getenv("AIWARE_LAUNCH_ID")
+		c.ControllerConfig.Kafka = c.Kafka
+		// with the exception of kafka brokers we want to pick up AIWARE_KAFKA_BROKERS
+
+		c.ControllerConfig.Kafka.Brokers = strings.Split(os.Getenv("AIWARE_KAFKA_BROKERS"), ",")
+
+		c.ControllerConfig.Webhooks = c.Webhooks
+		c.ControllerConfig.ProcessingOptions = c.Processing
+		c.ControllerConfig.SetDefaults()
 	}
 	return c
 }

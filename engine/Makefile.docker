@@ -1,0 +1,168 @@
+include Makefile.common
+
+# ------------------------ BUILDING DOCKER IMAGES FOR BASE ADAPTERS, ENGINES -------------------------------------------
+#
+# 1) Run `make -f Makefile.docker build-engine-base-docker` once to get a base Docker image that has ffmpeg, mime-support and streamlink
+# 2) `make -f Makefile.docker build-base-docker`  : to build the engine toolkit binary in an alpine Docker image
+# 3) `make -f Makefile.docker build-xxx` : build individual Docker image for the adapters, SIv2-related engines
+#
+# Or `make -f Makefile.docker build-all-engines`
+#
+# ----------------------------------------------------------------------------------------------------------------------
+
+alpine:
+	CGO_ENABLED=0 GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+
+BASE_IMAGE = engine-toolkit:base
+BASE_ENGINE_IMAGE = si-adapter:base
+
+WSA_IMAGE = webstream-adapter
+TVR_IMAGE = tv-and-radio-adapter
+SIV2_PLAYBACK_IMAGE = siv2-playback
+SIV2_FFMPEG_IMAGE = siv2-ffmpeg
+SIV2_ASSET_CREATOR_IMAGE = siv2-asset-creator
+
+#build-all: build-engine-base-docker build-base-docker build-wsa build-tvr build-playback build-asset build-ffmpeg
+build-base: build-engine-base-docker build-base-docker
+build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
+
+#build-all: build-wsa build-tvr build-playback build-asset build-ffmpeg
+
+push-all: push-wsa push-tvr push-playback push-asset push-ffmpeg
+
+## set up a base Docker with ffmpeg, mime-support, streamlink
+# Must do this at least once.
+build-engine-base-docker:
+	cd internal/controller/engines/base; docker build -t $(BASE_ENGINE_IMAGE) .
+
+## build a base image for engine-toolkit
+build-base-docker:
+	docker build -t $(BASE_IMAGE) \
+            --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
+            --build-arg githash=$(githash) .
+
+build-wsa: # build-base-docker
+	cd internal/controller/engines; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
+            --build-arg ENGINE_ID="9e611ad7-2d3b-48f6-a51b-0a1ba40feab4" \
+            --build-arg ENGINE_NAME="Webstream adapter" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+           .
+
+build-tvr: #build-base-docker
+	cd internal/controller/engines; docker build -t $(TVR_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest-tv-and-radio-adapter.json \
+            --build-arg ENGINE_ID="74dfd76b-472a-48f0-8395-c7e01dd7fd24" \
+            --build-arg ENGINE_NAME="TV & Radio adapter" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+build-playback: #build-base-docker
+	cd internal/controller/engines; docker build -t $(SIV2_PLAYBACK_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest-siv2-playback.json \
+            --build-arg ENGINE_ID="352556c7-de07-4d55-b33f-74b1cf237f25" \
+            --build-arg ENGINE_NAME="SIv2 Playback" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+build-asset: #build-base-docker
+	cd internal/controller/engines; docker build -t $(SIV2_ASSET_CREATOR_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest-siv2-asset-creator.json \
+            --build-arg ENGINE_ID="75fc943b-b5b0-4fe1-bcb6-9a7e1884257a" \
+            --build-arg ENGINE_NAME="SIv2 Asset Creator" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+build-ffmpeg: #build-base-docker
+	cd internal/controller/engines; docker build -t $(SIV2_FFMPEG_IMAGE) \
+            --build-arg MANIFEST_JSON=manifest-siv2-ffmpeg.json \
+            --build-arg ENGINE_ID="8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440" \
+            --build-arg ENGINE_NAME="SIv2 FFMPEG" \
+            --build-arg release=$(release) \
+            --build-arg builddate=$(builddate) \
+            --build-arg gitbranch=$(gitbranch) \
+            --build-arg githash=$(githash) \
+            .
+
+## -- pushing
+## -- running and testing
+start-kafka:
+	docker-compose up -d
+
+stop-kafka:
+	docker-compose down
+
+
+CURPWD:=$(shell pwd)
+ENVFILE:=controller-env.txt
+
+run-tv:
+	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp:/tmp $(TVR_IMAGE)
+
+run-webstream:
+	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp:/tmp  $(WSA_IMAGE)
+
+run-playback:
+	docker run -it --network host --rm --entrypoint=sh --env-file $(ENVFILE) \
+		-v ${CURPWD}:/src \
+		-v /tmp/cache:/cache \
+		-v /tmp:/tmp $(SIV2_PLAYBACK_IMAGE)
+
+
+
+## use this to make a new engine executable without having to build docker again
+# Then in the target container such as tv, etc. just do
+#   cp /src/release/bin/engine /app
+#
+run-base:
+	docker run -it --rm -v /tmp:/tmp -v ${CURPWD}:/go/src/github.com/veritone/engine-toolkit/engine $(BASE_IMAGE)
+
+# ----------------------------------------
+PROD_VDA=docker.veritone.com/7682
+DEV_VDA=docker.aws-dev.veritone.com/7682
+
+ENV_VDA=$(DEV_VDA)
+
+push-wsa:
+	docker tag $(WSA_IMAGE) $(ENV_VDA)/$(WSA_IMAGE)
+	docker push $(ENV_VDA)/$(WSA_IMAGE)
+
+push-tvr:
+	docker tag $(TVR_IMAGE) $(ENV_VDA)/$(TVR_IMAGE)
+	docker push $(ENV_VDA)/$(TVR_IMAGE)
+
+push-playback:
+	docker tag $(SIV2_PLAYBACK_IMAGE) $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_PLAYBACK_IMAGE)
+
+push-asset:
+	docker tag $(SIV2_ASSET_CREATOR_IMAGE) $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_ASSET_CREATOR_IMAGE)
+
+push-ffmpeg:
+	docker tag $(SIV2_FFMPEG_IMAGE) $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
+	docker push $(ENV_VDA)/$(SIV2_FFMPEG_IMAGE)
+
+#---------------------
+# Special target
+BUILD_ID=991914e9-91af-4f91-9fb2-ab527a5624cc
+push-tv-to-dev:
+	docker tag tv-and-radio-adapter 026972849384.dkr.ecr.us-east-1.amazonaws.com/dev-validated:74dfd76b-472a-48f0-8395-c7e01dd7fd24-$(BUILD_ID)
+	docker push 026972849384.dkr.ecr.us-east-1.amazonaws.com/dev-validated:74dfd76b-472a-48f0-8395-c7e01dd7fd24-$(BUILD_ID)
