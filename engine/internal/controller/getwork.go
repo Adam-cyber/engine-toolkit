@@ -3,19 +3,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/antihax/optional"
+	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	engines "github.com/veritone/realtime/modules/engines"
 	"github.com/veritone/realtime/modules/engines/outputWriter"
+	util "github.com/veritone/realtime/modules/engines/scfsio"
+	siv2core "github.com/veritone/realtime/modules/engines/siv2core"
+	siv2ffmpeg "github.com/veritone/realtime/modules/engines/siv2ffmpeg"
+	siv2playback "github.com/veritone/realtime/modules/engines/siv2playback"
+	"github.com/veritone/realtime/modules/engines/worker"
+	wsa_tvr "github.com/veritone/realtime/modules/engines/wsa_tvr_adapter"
 	"github.com/veritone/realtime/modules/logger"
 	"log"
 	"time"
-	"github.com/antihax/optional"
-	controllerClient "github.com/veritone/realtime/modules/controller/client"
-	"github.com/veritone/realtime/modules/engines/worker"
-	wsa_tvr "github.com/veritone/realtime/modules/engines/wsa_tvr_adapter"
-	util "github.com/veritone/realtime/modules/engines/scfsio"
-	siv2playback "github.com/veritone/realtime/modules/engines/siv2playback"
-	siv2core "github.com/veritone/realtime/modules/engines/siv2core"
-	engines "github.com/veritone/realtime/modules/engines"
-	siv2ffmpeg "github.com/veritone/realtime/modules/engines/siv2ffmpeg"
 )
 
 /**
@@ -61,14 +61,14 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 
 	c.priorTimestamp = time.Now().Unix()
 	curEngineWorkRequest := controllerClient.EngineInstanceWorkRequest{
-		WorkRequestId:      c.curWorkRequestId,
-		WorkRequestStatus:  c.curWorkRequestStatus,
-		WorkRequestDetails: c.curWorkRequestDetails,
-		HostId:             c.engineInstanceInfo.HostId,
-		HostAction:         c.curHostAction,
+		WorkRequestId:           c.curWorkRequestId,
+		WorkRequestStatus:       c.curWorkRequestStatus,
+		WorkRequestDetails:      c.curWorkRequestDetails,
+		HostId:                  c.engineInstanceInfo.HostId,
+		HostAction:              c.curHostAction,
 		RequestWorkForEngineIds: c.requestWorkForEngineIds,
-		TaskStatus:         c.curTaskStatusUpdatesForTheBatch,
-		ContainerStatus:    c.curContainerStatus,
+		TaskStatus:              c.curTaskStatusUpdatesForTheBatch,
+		ContainerStatus:         c.curContainerStatus,
 	}
 	res, _, err := c.controllerAPIClient.EngineApi.GetEngineInstanceWork(
 		context.WithValue(ctx, controllerClient.ContextAccessToken,
@@ -78,8 +78,9 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 	if err != nil {
 		// If there's an error -- probably need to retry in a few seconds
 		// much like the `wait`
-		log.Printf("%s returning err=%v", method, err)
-		return false, false, 0, err
+		realErrMsg := extractMeaningfulHttpResponseError(err)
+		log.Printf("%s returning err=%s", method, realErrMsg)
+		return false, false, 0, fmt.Errorf("Failed to get work from controller, err=%s", realErrMsg)
 	}
 
 	log.Printf("%s got action=%s", method, res.Action)
@@ -130,21 +131,23 @@ func (c *ControllerUniverse) AskForWork(ctx context.Context) (done bool, waitFor
 }
 
 func (c *ControllerUniverse) Terminate() {
-	_, err:=c.controllerAPIClient.EngineApi.TerminateEngineInstance(
+	_, err := c.controllerAPIClient.EngineApi.TerminateEngineInstance(
 		context.WithValue(context.Background(), controllerClient.ContextAccessToken,
 			c.engineInstanceRegistrationInfo.EngineInstanceToken),
 		c.engineInstanceId, &controllerClient.TerminateEngineInstanceOpts{
 			XCorrelationId: optional.NewInterface(c.correlationId),
 		})
-	log.Printf("[ControllerUniverse.Terminate:%s] TERMINATED, err=%v", c.engineInstanceId, err)
+	terminatedStatus := "OK"
+	if err != nil {
+		terminatedStatus = extractMeaningfulHttpResponseError(err)
+	}
+	log.Printf("[ControllerUniverse.Terminate:%s] TERMINATED terminated status=%s", c.engineInstanceId, terminatedStatus)
 }
 func (c *ControllerUniverse) updateTaskStatus(index int, status string) {
 	c.batchLock.Lock()
 	defer c.batchLock.Unlock()
 	c.curTaskStatusUpdatesForTheBatch[index].TaskStatus = status
 }
-
-
 
 // Work on the index-th item of the currentWorkItemsInABatch
 func (c *ControllerUniverse) Work(ctx context.Context, index int) {
@@ -154,26 +157,35 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 	method := fmt.Sprintf("[ControllerUniverse.Work:%s,wr:%s,t:%s]", c.engineInstanceId, c.curWorkRequestId,
 		curWorkItem.InternalTaskId)
 	// make sure we have some payload!
+	var (
+		wrk                      worker.Worker
+		workItemStatusManager, _ = util.GetWorkItemStatusManager(curStatus, &c.batchLock)
+		inputIOs                 []util.LocalSCFSIOInput
+		outputIOs                []util.LocalSCFSIOOutput
+		inputErr, outputErr      error
+	)
+	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
 	payloadJSON, err := util.InterfaceToString(curWorkItem.TaskPayload)
 	if payloadJSON == "" || err != nil {
-		// an error!!!
-		// should fail it -- What to do with failure!
-		c.batchLock.Lock()
-		curStatus.FailureReason = "Missing taskPayload"
-		curStatus.ErrorCount++
-		curStatus.TaskStatus = "failed"
-		c.batchLock.Unlock()
+		workItemStatusManager.ReportError(true, nil, curWorkItem.InternalTaskId, "Internal", "Missing taskPayload")
 		return
 	}
 
+	var inputOutputStatus string
+	if inputIOs, inputErr = util.GetIOInputsForWorkItem(curWorkItem, c.engineInstanceId); inputErr != nil {
+		inputOutputStatus = fmt.Sprintf("Input IO Error:%s\n", inputErr.Error())
+		log.Printf("%s ERROR: Failed to get IO Input for workItem, jobId=%s, taskId=%s, err=%v", method, curWorkItem.JobId, curWorkItem.TaskId, inputErr)
+	}
+	if outputIOs, outputErr = util.GetIOOutputsForWorkItem(curWorkItem, c.engineInstanceId); outputErr != nil {
+		inputOutputStatus = fmt.Sprintf("Output IO Error:%s\n", outputErr.Error())
+		log.Printf("%s ERROR: Failed to get IO Output for workItem, jobId=%s, taskId=%s, err=%v", method, curWorkItem.JobId, curWorkItem.TaskId, outputErr)
+	}
+	// exit out of here..
+	if len(inputOutputStatus) > 0 {
+		workItemStatusManager.ReportError(true, nil, curWorkItem.InternalTaskId, "Internal", inputOutputStatus)
+		return
+	}
 
-	log.Printf("%s, engineId=%s", method, curWorkItem.EngineId)
-	var (
-		wrk  worker.Worker
-	    workItemStatusManager, _ = util.GetWorkItemStatusManager(curStatus, &c.batchLock)
-	    inputIOs, _ = util.GetIOInputsForWorkItem(curWorkItem, c.engineInstanceId)
-	    outputIOs, _ = util.GetIOOutputsForWorkItem(curWorkItem, c.engineInstanceId)
-	)
 	switch curWorkItem.EngineId {
 	case engines.EngineIdTVRA:
 		fallthrough
@@ -218,14 +230,14 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 
 	default:
 		/*
-		 TODO for other chunk engines:
-			* need to read from the task's input IO
-		    * Acquire a chunk
-		    	* read the `media-chunk` from the userMetadata for the chunk
-		        * handling similar to that of the `runInference`.
-		        * However for the output --> we'll need to write to the output, if provided AND chunk_all
-		           Also some house keeping:  increment the processedCount for both input/output
-		 */
+			 TODO for other chunk engines:
+				* need to read from the task's input IO
+			    * Acquire a chunk
+			    	* read the `media-chunk` from the userMetadata for the chunk
+			        * handling similar to that of the `runInference`.
+			        * However for the output --> we'll need to write to the output, if provided AND chunk_all
+			           Also some house keeping:  increment the processedCount for both input/output
+		*/
 		panic("TO BE IMPLEMENTED")
 	}
 

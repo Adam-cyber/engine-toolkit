@@ -7,8 +7,8 @@ import (
 
 	"fmt"
 	"log"
-	"time"
 	"sync"
+	"time"
 )
 
 /**
@@ -58,7 +58,7 @@ func (c *ControllerUniverse) UpdateEngineInstanceStatus(ctx context.Context, wg 
 				curEngineInstanceStatus, headerOpts)
 			if err != nil {
 				// TODO error handling
-				log.Printf("%s Got error calling UpdateEngineInstanceStatus Controller API, err=%v", method, err)
+				log.Printf("%s Got error calling UpdateEngineInstanceStatus Controller API, err=%s", method, extractMeaningfulHttpResponseError(err))
 			} else {
 				// reset timestamps, processed cout
 				c.priorTimestamp = curEngineInstanceStatus.Timestamp

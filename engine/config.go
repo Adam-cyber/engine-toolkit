@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/veritone/engine-toolkit/engine/internal/controller"
+	"github.com/veritone/engine-toolkit/engine/processing"
 	"io"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/veritone/engine-toolkit/engine/processing"
 )
 
 // Config holds engine configuration settings.

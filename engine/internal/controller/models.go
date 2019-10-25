@@ -1,20 +1,20 @@
 package controller
 
 import (
+	"github.com/veritone/engine-toolkit/engine/processing"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
 	util "github.com/veritone/realtime/modules/engines/scfsio"
+	"net/http"
+	"os"
 	"sync"
 	"time"
-	"os"
-	"github.com/veritone/engine-toolkit/engine/processing"
-	"net/http"
 )
 
 const (
-	engineIdSI2Playback  = "352556c7-de07-4d55-b33f-74b1cf237f25"
-	engineIdWSA  = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
-	engineIdTVRA = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
-	engineIdOW   = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
+	engineIdSI2Playback = "352556c7-de07-4d55-b33f-74b1cf237f25"
+	engineIdWSA         = "9e611ad7-2d3b-48f6-a51b-0a1ba40feab4"
+	engineIdTVRA        = "74dfd76b-472a-48f0-8395-c7e01dd7fd24"
+	engineIdOW          = "8eccf9cc-6b6d-4d7d-8cb3-7ebf4950c5f3"
 
 	engineIdSI2AudiVideoChunk = "8bdb0e3b-ff28-4f6e-a3ba-887bd06e6440"
 
@@ -65,7 +65,7 @@ type VeritoneControllerConfig struct {
 	ControllerMode       bool   `json:"controllerMode"`
 	ControllerUrl        string `json:"controllerUrl"`
 	HostId               string `json:"hostId"`
-	LaunchId			 string `json:"launchId"`
+	LaunchId             string `json:"launchId"`
 	SkipOutputToKafka    bool   `json:"skipOutputToKafka"`
 	Token                string `json:"token"`
 	UpdateStatusInterval string `json:"updateStatusInterval"`
@@ -85,25 +85,24 @@ type VeritoneControllerConfig struct {
 	Kafka processing.Kafka
 	//copied from engine
 	Webhooks processing.Webhooks
-
 }
 
 func (c *VeritoneControllerConfig) String() string {
 	return util.ToString(c)
 }
-func SampleVeritoneControllerConfig () string {
-	sampleConfig:=VeritoneControllerConfig{
-		ControllerMode: true,
-		ControllerUrl : "http://localhost:9000/edge/v1",
-		SkipOutputToKafka:true,
-		HostId: util.GenerateUuid(),
-		Token: util.GenerateUuid(),
-		UpdateStatusInterval:"5s",
-		ProcessingTTLInSeconds: 6000,
+func SampleVeritoneControllerConfig() string {
+	sampleConfig := VeritoneControllerConfig{
+		ControllerMode:             true,
+		ControllerUrl:              "http://localhost:9000/edge/v1",
+		SkipOutputToKafka:          true,
+		HostId:                     util.GenerateUuid(),
+		Token:                      util.GenerateUuid(),
+		UpdateStatusInterval:       "5s",
+		ProcessingTTLInSeconds:     6000,
 		LicenseExpirationInSeconds: 100000,
 		IdleQueryIntervalInSeconds: 5,
-		IdleWaitTimeoutInSeconds: 60,
-		GraphQLTimeoutDuration: "3m",
+		IdleWaitTimeoutInSeconds:   60,
+		GraphQLTimeoutDuration:     "3m",
 	}
 	return sampleConfig.String()
 }
@@ -132,7 +131,7 @@ func (c *VeritoneControllerConfig) SetDefaults() {
 		c.HostId = os.Getenv("HOST_ID")
 	}
 
-	if c.Kafka.ChunkTopic=="" {
+	if c.Kafka.ChunkTopic == "" {
 		c.Kafka.ChunkTopic = "chunk_all"
 	}
 }
@@ -164,9 +163,9 @@ type ControllerUniverse struct {
 	curTaskStatusUpdatesForTheBatch []controllerClient.TaskStatusUpdate
 
 	// still need this
-	producer      processing.Producer
+	producer        processing.Producer
 	kafkaChunkTopic string
-	webhookConfig processing.Webhooks
+	webhookConfig   processing.Webhooks
 
 	webhookClient *http.Client
 
