@@ -229,16 +229,11 @@ func (c *ControllerUniverse) Work(ctx context.Context, index int) {
 		wrk, err = outputwriter.NewOutputWriter(payloadJSON, &c.batchLock, curWorkItem, curStatus, logger.NewLogger())
 
 	default:
-		/*
-			 TODO for other chunk engines:
-				* need to read from the task's input IO
-			    * Acquire a chunk
-			    	* read the `media-chunk` from the userMetadata for the chunk
-			        * handling similar to that of the `runInference`.
-			        * However for the output --> we'll need to write to the output, if provided AND chunk_all
-			           Also some house keeping:  increment the processedCount for both input/output
-		*/
-		panic("TO BE IMPLEMENTED")
+		wrk, err = NewExternalEngineHandler(payloadJSON,
+			c.engineInstanceId, curWorkItem, workItemStatusManager, inputIOs, outputIOs,
+			c.producer, "chunk_all",
+			c.controllerConfig.Webhooks, c.controllerConfig.ProcessingOptions,
+			c.webhookClient, c.graphQLHTTPClient)
 	}
 
 	var errReason worker.ErrorReason

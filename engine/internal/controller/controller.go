@@ -10,6 +10,7 @@ import (
 	"github.com/veritone/realtime/modules/engines"
 	util "github.com/veritone/realtime/modules/engines/scfsio"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -113,6 +114,8 @@ func NewControllerUniverse(controllerConfig *VeritoneControllerConfig, etVersion
 			curHostAction:                  hostActionRunning,
 			curEngineMode:                  engineModeIdle,
 			producer:                       producer,
+			webhookClient:                  &http.Client{ /* no timeout */ },
+			graphQLHTTPClient:              &http.Client{Timeout: 30 * time.Minute},
 		}, nil
 	}
 	return nil, errors.Wrapf(err, "Failed to register engine instance with controller at %s", controllerConfig.ControllerUrl)

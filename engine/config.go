@@ -159,6 +159,9 @@ func NewConfig() Config {
 		// with the exception of kafka brokers we want to pick up AIWARE_KAFKA_BROKERS
 
 		c.ControllerConfig.Kafka.Brokers = strings.Split(os.Getenv("AIWARE_KAFKA_BROKERS"), ",")
+
+		c.ControllerConfig.Webhooks = c.Webhooks
+		c.ControllerConfig.ProcessingOptions = c.Processing
 		c.ControllerConfig.SetDefaults()
 	}
 	return c

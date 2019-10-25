@@ -462,8 +462,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 				if err != nil {
 					return errors.Wrap(err, "reading multipart response")
 				}
-				// todo edge514- what's the user case here what's the assetType?
-				assetCreate := AssetCreate{
+				assetCreate := processing.AssetCreate{
 					ContainerTDOID: mediaChunk.TDOID,
 					ContentType:    p.Header.Get("Content-Type"),
 					Name:           p.FileName(),

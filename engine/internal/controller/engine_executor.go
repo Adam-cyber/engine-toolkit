@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/veritone/engine-toolkit/engine/processing"
 	controllerClient "github.com/veritone/realtime/modules/controller/client"
+	owModels "github.com/veritone/realtime/modules/engines/outputWriter/models"
 	"github.com/veritone/realtime/modules/engines/scfsio"
 	"github.com/veritone/realtime/modules/engines/worker"
 	"log"
@@ -22,7 +23,16 @@ import (
 		"github.com/veritone/engine-toolkit/engine/internal/vericlient"
 		"io/ioutil"
 	*/
+	"bytes"
+	"fmt"
+	"github.com/pkg/errors"
+	"github.com/veritone/engine-toolkit/engine/internal/vericlient"
+	"io"
+	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"strings"
 )
 
 //here's what going to happen
@@ -56,7 +66,13 @@ type ExternalEngineHandler struct {
 	producer        processing.Producer
 	kafkaChunkTopic string
 	webhookConfig   processing.Webhooks
-	webhookClient   *http.Client
+
+	// client is the client to use to make webhook requests.
+	webhookClient *http.Client
+	// graphQLHTTPClient is the client used to access GraphQL.
+	graphQLHTTPClient *http.Client
+
+	processingConfig processing.Processing
 }
 
 func NewExternalEngineHandler(payloadJSON string,
@@ -67,7 +83,10 @@ func NewExternalEngineHandler(payloadJSON string,
 	outputIO []scfsio.LocalSCFSIOOutput,
 	producer processing.Producer,
 	kafkaChunkTopic string,
-	webhookConfig processing.Webhooks) (res worker.Worker, err error) {
+	webhookConfig processing.Webhooks,
+	processingConfig processing.Processing,
+	webhookClient *http.Client,
+	graphQLHTTPClient *http.Client) (res worker.Worker, err error) {
 	return &ExternalEngineHandler{
 		engineInstanceId:      engineInstanceId,
 		engineId:              workItem.EngineId,
@@ -77,9 +96,13 @@ func NewExternalEngineHandler(payloadJSON string,
 		inputIO:               inputIO,
 		outputIO:              outputIO,
 
-		producer:        producer,
-		kafkaChunkTopic: kafkaChunkTopic,
-		webhookConfig:   webhookConfig,
+		producer:         producer,
+		kafkaChunkTopic:  kafkaChunkTopic,
+		webhookConfig:    webhookConfig,
+		processingConfig: processingConfig,
+
+		webhookClient:     webhookClient,
+		graphQLHTTPClient: graphQLHTTPClient,
 	}, nil
 }
 
@@ -91,10 +114,11 @@ func (e *ExternalEngineHandler) startHeartbeat(ctx context.Context) {
 }
 
 func (e *ExternalEngineHandler) Stats() (totalRead int64, totalWritten int64, outputSummary map[string]interface{}) {
-	return
+	return e.totalRead, e.totalWritten, e.outputSummary
 }
 
 func (e *ExternalEngineHandler) Run(ctx context.Context) (errReason worker.ErrorReason) {
+	method := fmt.Sprintf("[externalEngineHandler.Run taskId=%s]", e.workItem.TaskId)
 	if e.workItem.EngineType != "chunk" {
 		// got to do heartbeat here baby
 		// also todo stream engine!!!
@@ -117,43 +141,24 @@ func (e *ExternalEngineHandler) Run(ctx context.Context) (errReason worker.Error
 		var outputChunk *scfsio.LocalSCFSChunkOutput
 		inputChunk, err = designatedInputIO.GetReader(ctx, "") // plain acquire chunks
 		if err != nil {
-			//todo edge514 error & retry
+			e.workItemStatusManager.ReportError(false, err, designatedInputIO.String(), "internal_error",
+				fmt.Sprintf("%s Failed to get reader for input chunk", method))
+			continue
 		}
-		// todo there may be error Chunks returning, see how we can update this info
-		// back to controller via WorkItemStatusManager
-		//
+
 		inputChunkIndex := inputChunk.GetCurChunkContext()
 
 		if designatedOutputIO != nil {
 			outputChunk = designatedOutputIO.GetWriter(inputChunkIndex)
-			log.Println("STOP FOR NOW.. %s", outputChunk.String())
 		}
 
-		// check for chunk MAIN_MESSAGE
-		userMetadata := inputChunk.GetCurChunkInfo().GetUserMetadata()
-		var chunkMainMessage interface{}
-		if userMetadata != nil {
-			chunkMainMessage = userMetadata[scfsio.CHUNK_MAIN_MESSAGE]
-		}
-		if chunkMainMessage == nil {
-			continue // SKIP and will come back
-		}
-		bArr, err := json.Marshal(chunkMainMessage)
+		mediaChunk, err := e.getMediaChunk(inputChunk)
 		if err != nil {
-			// TODO edge514 -- should we fall back on some other format/??
-			// just continue for now
+			e.workItemStatusManager.ReportError(false, err, designatedInputIO.String(), "internal_error",
+				fmt.Sprintf("%s Failed to get reader for input chunk", method))
 			continue
 		}
-		// theoretically engine output and media chunk share the same structure,
-		// so here, we have the MediaChunkMessage is a union of both
-		var mediaChunk processing.MediaChunkMessage
-		if err := json.Unmarshal(bArr, &mediaChunk); err != nil {
-			// TODO edge514 -- error handling
-			continue
-		}
-		// correct the TaskId since it's no lone need to map this media chunk that was from the `parent` to this task
-		mediaChunk.TaskID = e.workItem.TaskId
-		//		e.processChunk()
+		err = e.processChunk(ctx, mediaChunk, inputChunk, outputChunk)
 	}
 	/**
 	we have work item.
@@ -161,8 +166,42 @@ func (e *ExternalEngineHandler) Run(ctx context.Context) (errReason worker.Error
 	we have directive to process N chunks
 	// do we want to handle stream engine here? not so since it will involev
 	*/
-
+	if e.outputSummary == nil {
+		e.outputSummary = make(map[string]interface{})
+	}
+	if designatedInputIO != nil {
+		e.totalRead, e.outputSummary["inputChunks"] = designatedInputIO.GetStats()
+	}
+	if designatedOutputIO != nil {
+		e.totalWritten, e.outputSummary["outputChunks"] = designatedOutputIO.GetStats()
+	}
 	return errReason
+}
+
+func (e *ExternalEngineHandler) getMediaChunk(inputChunk *scfsio.LocalSCFSChunkInput) (mediaChunk *processing.MediaChunkMessage, err error) {
+	// check for chunk MAIN_MESSAGE
+	userMetadata := inputChunk.GetCurChunkInfo().GetUserMetadata()
+	var chunkMainMessage interface{}
+	if userMetadata != nil {
+		chunkMainMessage = userMetadata[scfsio.CHUNK_MAIN_MESSAGE]
+	}
+	if chunkMainMessage == nil {
+		return nil, fmt.Errorf("Unable to find %s in chunk %s usermetadata", scfsio.CHUNK_MAIN_MESSAGE, inputChunk.String())
+	}
+	bArr, err := json.Marshal(chunkMainMessage) // marshal this to byte array so we can unmarshal it to another type
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to read %s in chunk %s usermetadata", scfsio.CHUNK_MAIN_MESSAGE, inputChunk.String())
+	}
+	// theoretically engine output and media chunk share the same structure,
+	// so here, we have the MediaChunkMessage is a union of both
+	mediaChunk = new(processing.MediaChunkMessage)
+	if err := json.Unmarshal(bArr, mediaChunk); err != nil {
+		return nil, errors.Wrapf(err, "Failed to convert to media chunk for chunk %s", inputChunk.String())
+	}
+	// correct the TaskId since it's no lone need to map this media chunk that was from the `parent` to this task
+	mediaChunk.TaskID = e.workItem.TaskId
+	mediaChunk.TaskPayload = json.RawMessage(e.payloadJSON)
+	return mediaChunk, nil
 }
 
 /**
@@ -174,7 +213,9 @@ write a chunk + userMetadata =
         main-message = engineOutput?
 
 */
-func (e *ExternalEngineHandler) processChunk(mediaChunk *processing.MediaChunkMessage) error {
+func (e *ExternalEngineHandler) processChunk(ctx context.Context, mediaChunk *processing.MediaChunkMessage,
+	inputChunk *scfsio.LocalSCFSChunkInput, outputChunk *scfsio.LocalSCFSChunkOutput) (err error) {
+
 	finalUpdateMessage := processing.ChunkResult{
 		Type:      processing.MessageTypeChunkResult,
 		TaskID:    mediaChunk.TaskID,
@@ -182,142 +223,179 @@ func (e *ExternalEngineHandler) processChunk(mediaChunk *processing.MediaChunkMe
 		Status:    processing.ChunkStatusSuccess, // optimistic
 	}
 	defer func() {
-		// key = taskId
-		// send the final (ChunkResult) message which is teo be
-		finalUpdateMessage.TimestampUTC = time.Now().Unix()
-		_, _, err := e.producer.SendMessage(&sarama.ProducerMessage{
-			Topic: e.kafkaChunkTopic,
-			Key:   sarama.ByteEncoder(mediaChunk.TaskID),
-			Value: processing.NewJSONEncoder(finalUpdateMessage),
-		})
-		// write to output with metadata for this finalUpdateMessage as well..
-		// todo - finalize the chunk output??
 		if err != nil {
-			log.Printf("IGNORE .. failed to send final chunk update to Kafka:", err)
+			// mark the chunk input as having error
+			inputChunk.Close(false, errors.Wrapf(err, "Failed to process Chunk=%s", inputChunk.String()))
+			return
+		}
+		// if need to send to Kafka then the producer would be non-nil
+		if e.producer != nil {
+			finalUpdateMessage.TimestampUTC = time.Now().Unix()
+			_, _, kafkaErr := e.producer.SendMessage(&sarama.ProducerMessage{
+				Topic: e.kafkaChunkTopic,
+				Key:   sarama.ByteEncoder(mediaChunk.TaskID),
+				Value: processing.NewJSONEncoder(finalUpdateMessage),
+			})
+			if kafkaErr != nil {
+				log.Printf("IGNORE .. failed to send final chunk update to Kafka:", kafkaErr)
+			}
+		}
+		// For now only write out engineOutput..
+		if finalUpdateMessage.EngineOutput != nil && outputChunk != nil {
+			engineOutput := finalUpdateMessage.EngineOutput
+
+			if engineOutput.Content != "" {
+				//let's write to the chunk
+				outputChunk.Write([]byte(engineOutput.Content))
+			}
+			engineOutput.Content = "" // don't save this..
+			outputChunk.AddUserMetadata(scfsio.CHUNK_MAIN_MESSAGE, engineOutput)
+			outputChunk.Close()
 		}
 	}()
-	/*
-		 ignoreChunk := false
-		 /// TODO to be continued
-		 retry := processing.NewDoubleTimeBackoff(
-			 e.webhookConfig.Backoff.InitialBackoffDuration,
-			 e.webhookConfig.Backoff.MaxBackoffDuration,
-			 e.webhookConfig.Backoff.MaxRetries,
-		 )
-		 var content string
-		 err := retry.Do(func() error {
-			 req, err := processing.NewRequestFromMediaChunk(e.webhookClient, e.Config.Webhooks.Process.URL,
-				 mediaChunk, e.Config.Processing.DisableChunkDownload)
-			 if err != nil {
-				 return errors.Wrap(err, "new request")
-			 }
-			 req = req.WithContext(ctx)
-			 resp, err := e.webhookClient.Do(req)
-			 if err != nil {
-				 return err
-			 }
-			 defer resp.Body.Close()
-			 if resp.StatusCode == http.StatusNoContent {
-				 ignoreChunk = true
-				 return nil
-			 }
-			 if resp.StatusCode != http.StatusOK {
-				 var buf bytes.Buffer
-				 if _, err := io.Copy(&buf, resp.Body); err != nil {
-					 return errors.Wrap(err, "read body")
-				 }
-				 return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
-			 }
-			 if resp.ContentLength == 0 {
-				 ignoreChunk = true
-				 return nil
-			 }
-			 mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-			 if err != nil {
-				 e.logDebug("content type parsing failed, assuming json:", err)
-			 }
-			 if strings.HasPrefix(mediaType, "multipart/") {
-				 // files output
-				 payload, err := mediaChunk.UnmarshalPayload()
-				 if err != nil {
-					 return errors.Wrap(err, "unmarshal payload")
-				 }
-				 type mediaItem struct {
-					 AssetID     string `json:"assetId"`
-					 ContentType string `json:"contentType"`
-				 }
-				 var outputJSON struct {
-					 Media []mediaItem `json:"media"`
-				 }
-				 mr := multipart.NewReader(resp.Body, params["boundary"])
-				 for {
-					 p, err := mr.NextPart()
-					 if err == io.EOF {
-						 break
-					 }
-					 if err != nil {
-						 return errors.Wrap(err, "reading multipart response")
-					 }
-					 // todo edge514- what's the user case here what's the assetType?
-					 assetCreate := AssetCreate{
-						 ContainerTDOID: mediaChunk.TDOID,
-						 ContentType:    p.Header.Get("Content-Type"),
-						 Name:           p.FileName(),
-						 Body:           p,
-					 }
-					 client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL+"/v3/graphql")
-					 createdAsset, err := assetCreate.Do(ctx, client)
-					 if err != nil {
-						 return errors.Wrapf(err, "create asset for %s", p.FileName())
-					 }
-					 outputJSON.Media = append(outputJSON.Media, mediaItem{
-						 AssetID:     createdAsset.ID,
-						 ContentType: createdAsset.ContentType,
-					 })
-					 return nil
-				 }
-				 jsonBytes, err := json.Marshal(outputJSON)
-				 if err != nil {
-					 return errors.Wrap(err, "encode output JSON")
-				 }
-				 content = string(jsonBytes)
-			 } else {
-				 // JSON output
-				 bodyBytes, err := ioutil.ReadAll(resp.Body)
-				 if err != nil {
-					 return errors.Wrap(err, "read response body")
-				 }
-				 content = string(bodyBytes)
-			 }
-			 return nil
-		 })
-		 if err != nil {
-			 // send error message
-			 finalUpdateMessage.Status = processing.ChunkStatusError
-			 finalUpdateMessage.ErrorMsg = err.Error()
-			 finalUpdateMessage.FailureReason = "internal_error"
-			 finalUpdateMessage.FailureMsg = finalUpdateMessage.ErrorMsg
-			 return err
-		 }
-		 if ignoreChunk {
-			 finalUpdateMessage.Status = processing.ChunkStatusIgnored
-			 return nil
-		 }
-		 // send output message
-		 outputMessage := processing.MediaChunkMessage{
-			 Type:          processing.MessageTypeEngineOutput,
-			 TaskID:        mediaChunk.TaskID,
-			 JobID:         mediaChunk.JobID,
-			 ChunkUUID:     mediaChunk.ChunkUUID,
-			 StartOffsetMS: mediaChunk.StartOffsetMS,
-			 EndOffsetMS:   mediaChunk.EndOffsetMS,
-			 TimestampUTC:  time.Now().Unix(),
-			 Content:       content,
-		 }
-		 tmp, _ := json.Marshal(outputMessage)
-		 e.logDebug("outputMessage will be sent to kafka: ", string(tmp))
-		 finalUpdateMessage.TimestampUTC = time.Now().Unix()
-		 finalUpdateMessage.EngineOutput = &outputMessage
-	*/
-	return nil
+
+	ignoreChunk := false
+
+	retry := processing.NewDoubleTimeBackoff(
+		e.webhookConfig.Backoff.InitialBackoffDuration,
+		e.webhookConfig.Backoff.MaxBackoffDuration,
+		e.webhookConfig.Backoff.MaxRetries,
+	)
+	// todo: see if we can host the input data within the engine toolkit
+	// in an HTTP endpoint --
+	// currently the cacheUri in the media message is the controller chunk cache uri
+	// this is only temporary to accommodate v2f engines.
+	// for v3 -- we should have it directly retrieved here.
+
+	var content string
+	err = retry.Do(func() error {
+		req, err := processing.NewRequestFromMediaChunk(e.webhookClient, e.webhookConfig.Process.URL,
+			*mediaChunk, e.processingConfig.DisableChunkDownload)
+		if err != nil {
+			return errors.Wrap(err, "new request")
+		}
+		req = req.WithContext(ctx)
+		resp, err := e.webhookClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusNoContent {
+			ignoreChunk = true
+			return nil
+		}
+		if resp.StatusCode != http.StatusOK {
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, resp.Body); err != nil {
+				return errors.Wrap(err, "read body")
+			}
+			return errors.Errorf("%d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
+		}
+		if resp.ContentLength == 0 {
+			ignoreChunk = true
+			return nil
+		}
+		mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if err != nil {
+			log.Println("content type parsing failed, assuming json:", err)
+		}
+		if strings.HasPrefix(mediaType, "multipart/") {
+			// files output
+			payload, err := mediaChunk.UnmarshalPayload()
+			if err != nil {
+				return errors.Wrap(err, "unmarshal payload")
+			}
+			type mediaItem struct {
+				AssetID     string `json:"assetId"`
+				ContentType string `json:"contentType"`
+			}
+			var outputJSON struct {
+				Media []mediaItem `json:"media"`
+			}
+			mr := multipart.NewReader(resp.Body, params["boundary"])
+			for {
+				p, err := mr.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return errors.Wrap(err, "reading multipart response")
+				}
+
+				// missing assetType ...
+				assetCreate := processing.AssetCreate{
+					ContainerTDOID: mediaChunk.TDOID,
+					ContentType:    p.Header.Get("Content-Type"),
+					Name:           p.FileName(),
+					Body:           p,
+				}
+				client := vericlient.NewClient(e.graphQLHTTPClient, payload.Token, payload.VeritoneAPIBaseURL+"/v3/graphql")
+				createdAsset, err := assetCreate.Do(ctx, client)
+				if err != nil {
+					return errors.Wrapf(err, "create asset for %s", p.FileName())
+				}
+				outputJSON.Media = append(outputJSON.Media, mediaItem{
+					AssetID:     createdAsset.ID,
+					ContentType: createdAsset.ContentType,
+				})
+				return nil
+			}
+			jsonBytes, err := json.Marshal(outputJSON)
+			if err != nil {
+				return errors.Wrap(err, "encode output JSON")
+			}
+			content = string(jsonBytes)
+		} else {
+			// JSON output
+			bodyBytes, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return errors.Wrap(err, "read response body")
+			}
+			var vtnStandardEngineOutput owModels.VtnStandardOutput
+			err = json.Unmarshal(bodyBytes, &vtnStandardEngineOutput)
+			if err == nil {
+				// assign SourceEngineId and TaskId
+				vtnStandardEngineOutput.TaskId = e.workItem.TaskId
+				vtnStandardEngineOutput.SourceEngineId = e.workItem.EngineId
+				// ok deseralize back
+				jsonBytes, err := json.Marshal(vtnStandardEngineOutput)
+				if err == nil {
+					bodyBytes = jsonBytes
+				}
+			}
+			content = string(bodyBytes)
+		}
+		return nil
+	})
+	if err != nil {
+		// send error message
+		finalUpdateMessage.Status = processing.ChunkStatusError
+		finalUpdateMessage.ErrorMsg = err.Error()
+		finalUpdateMessage.FailureReason = "internal_error"
+		finalUpdateMessage.FailureMsg = finalUpdateMessage.ErrorMsg
+		return err
+	}
+	if ignoreChunk {
+		finalUpdateMessage.Status = processing.ChunkStatusIgnored
+		err = nil
+		return err
+	}
+	// send output message
+	outputMessage := processing.MediaChunkMessage{
+		Type:          processing.MessageTypeEngineOutput,
+		TaskID:        mediaChunk.TaskID,
+		JobID:         mediaChunk.JobID,
+		ChunkUUID:     mediaChunk.ChunkUUID,
+		StartOffsetMS: mediaChunk.StartOffsetMS,
+		EndOffsetMS:   mediaChunk.EndOffsetMS,
+		TimestampUTC:  time.Now().Unix(),
+		Content:       content,
+	}
+	tmp, _ := json.Marshal(outputMessage)
+	log.Println("outputMessage will be sent to kafka: ", string(tmp))
+	finalUpdateMessage.TimestampUTC = time.Now().Unix()
+	finalUpdateMessage.EngineOutput = &outputMessage
+
+	err = nil // set up so defer can check on it
+	return err
 }

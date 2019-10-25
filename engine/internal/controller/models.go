@@ -85,6 +85,8 @@ type VeritoneControllerConfig struct {
 	Kafka processing.Kafka
 	//copied from engine
 	Webhooks processing.Webhooks
+
+	ProcessingOptions processing.Processing
 }
 
 func (c *VeritoneControllerConfig) String() string {
@@ -163,11 +165,10 @@ type ControllerUniverse struct {
 	curTaskStatusUpdatesForTheBatch []controllerClient.TaskStatusUpdate
 
 	// still need this
-	producer        processing.Producer
-	kafkaChunkTopic string
-	webhookConfig   processing.Webhooks
+	producer processing.Producer
 
-	webhookClient *http.Client
+	webhookClient     *http.Client
+	graphQLHTTPClient *http.Client
 
 	priorTimestamp int64
 }
