@@ -17,13 +17,16 @@ ARG githash
 ADD . /go/src/github.com/veritone/engine-toolkit/engine
 WORKDIR /go/src/github.com/veritone/engine-toolkit/engine
 
-ENV GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN}
-RUN echo ${GITHUB_ACCESS_TOKEN} 
-RUN apk update && apk add -U build-base git curl libstdc++ ca-certificates
-RUN git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-RUN mkdir /app 
-ENV CGO_ENABLED=0
-RUN GOPATH=/go githash=${githash} make -e deps
-RUN GOPATH=/go githash=${githash} make -e -f Makefile.docker alpine && cp release/bin/engine /app/
+## temporary block for now
+#TEMP ENV GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN}
+#TEMP RUN echo ${GITHUB_ACCESS_TOKEN} 
+#TEMP RUN apk update && apk add -U build-base git curl libstdc++ ca-certificates
+#TEMP RUN git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+#TEMP RUN mkdir /app 
+#TEMP ENV CGO_ENABLED=0
 
+#TEMP RUN GOPATH=/go githash=${githash} make -e deps
+#TEMP RUN GOPATH=/go githash=${githash} make -e -f Makefile.docker alpine && cp release/bin/engine /app/
 
+# TEMPORARY HERE -- do a build outside then copy into this
+COPY engine /app/
