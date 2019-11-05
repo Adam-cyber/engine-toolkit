@@ -11,7 +11,8 @@ include Makefile.common
 # ----------------------------------------------------------------------------------------------------------------------
 
 alpine:
-	CGO_ENABLED=0 GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	#CGO_ENABLED=0 GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
+	CGO_ENABLED=0 GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o engine
 
 BASE_IMAGE = engine-toolkit:base
 BASE_ENGINE_IMAGE = si-adapter:base
@@ -36,7 +37,11 @@ build-engine-base-docker:
 	cd internal/controller/engines/base; docker build -t $(BASE_ENGINE_IMAGE) .
 
 ## build a base image for engine-toolkit
-build-base-docker:
+#TEMPORARY BLOCK
+#build-base-docker:
+
+# TEMPORARY HERE:
+build-base-docker: alpine
 	docker build -t $(BASE_IMAGE) \
             --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
             --build-arg githash=$(githash) .

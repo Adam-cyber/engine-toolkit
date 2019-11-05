@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+	"go.uber.org/atomic"
 )
 
 /**
@@ -142,14 +143,23 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	defer cancel()
 	processedCount := 0
 	e.controller.SetWorkRequestStatus("same", "running", fmt.Sprintf("New batch %d items", batchSize))
-
+	var engineIsWorking atomic.Bool
 	for {
 		select {
 		case <-ctx.Done():
+			// not when we're working on something..
+			for {
+				if engineIsWorking.Load() {
+					log.Println("Engine is still working .. sleep a bit")
+					time.Sleep(500*time.Millisecond)
+				}
+			}
 			return
 		default:
 			e.controller.SetWorkRequestStatus("same", "same", fmt.Sprintf("working on %d/%d...", processedCount, batchSize))
+			engineIsWorking.Store(true)
 			e.controller.Work(ctx, processedCount)
+			engineIsWorking.Store(false)
 			processedCount++ //move on to the next one..
 			if processedCount == batchSize {
 				// done
