@@ -44,7 +44,12 @@ build-engine-base-docker:
 build-base-docker: alpine
 	docker build -t $(BASE_IMAGE) \
             --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
-            --build-arg githash=$(githash) .
+            --build-arg githash=$(githash) -f Dockerfile.temp .
+
+build-base-docker.real:
+	docker build -t $(BASE_IMAGE) \
+            --build-arg GITHUB_ACCESS_TOKEN=$(GITHUB_ACCESS_TOKEN) \
+            --build-arg githash=$(githash) -f Dockerfile .
 
 build-wsa: # build-base-docker
 	cd internal/controller/engines; docker build -t $(WSA_IMAGE) --build-arg MANIFEST_JSON=manifest-webstream-adapter.json \
