@@ -21,12 +21,12 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
+	"github.com/veritone/realtime/modules/engines/scfsio"
 	"github.com/veritone/realtime/modules/engines/toolkit/controller"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 	"github.com/veritone/realtime/modules/engines/toolkit/selfdriving"
 	"github.com/veritone/realtime/modules/engines/toolkit/vericlient"
-	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 	rtLogger "github.com/veritone/realtime/modules/logger"
-	"github.com/veritone/realtime/modules/engines/scfsio"
 )
 
 // Engine consumes messages and calls webhooks to
@@ -58,7 +58,7 @@ type Engine struct {
 
 	// Controller specific
 	controller *controller.ControllerUniverse
-	logger rtLogger.Logger
+	logger     rtLogger.Logger
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
@@ -67,7 +67,7 @@ type Engine struct {
 func NewEngine() *Engine {
 	// generate engineInstanceId and use that for logging
 	engineInstanceId := os.Getenv("ENGINE_INSTANCE_ID")
-	if engineInstanceId=="" {
+	if engineInstanceId == "" {
 		engineInstanceId = scfsio.GenerateUuid()
 	}
 	logFileName, logWriter, logger := scfsio.GetLogFileForEngineInstance(engineInstanceId)
@@ -96,16 +96,17 @@ func isTrainingTask() (bool, error) {
 
 func (e *Engine) Terminate() {
 	// close up stuff
-	if e.Config.ControllerConfig.LogWriter!=nil {
+	if e.Config.ControllerConfig.LogWriter != nil {
 		e.Config.ControllerConfig.LogWriter.Close()
 		// also direct the logger to just os
 		if e.Config.ControllerConfig.Logger != nil {
-			if e.Config.ControllerConfig.Logger.GetLogrus()!=nil {
+			if e.Config.ControllerConfig.Logger.GetLogrus() != nil {
 				e.Config.ControllerConfig.Logger.GetLogrus().Out = os.Stdout
 			}
 		}
 	}
 }
+
 // Run runs the Engine.
 // Context errors may be returned.
 // TODO For controller route, we need to deal with batch, library engine training from within the loop

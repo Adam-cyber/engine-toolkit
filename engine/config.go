@@ -83,7 +83,7 @@ func NewConfig(engineInstanceId string, logFileName string, logWriter io.WriteCl
 		}
 	}
 
-	c.Engine.InstanceID =  os.Getenv("ENGINE_INSTANCE_ID")
+	c.Engine.InstanceID = os.Getenv("ENGINE_INSTANCE_ID")
 	if c.Engine.InstanceID == "" {
 		c.Engine.InstanceID = engineInstanceId
 	}

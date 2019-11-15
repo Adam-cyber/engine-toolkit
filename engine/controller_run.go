@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/veritone/realtime/modules/controller/client"
+	"go.uber.org/atomic"
 	"log"
 	"os/exec"
 	"sync"
 	"time"
-	"go.uber.org/atomic"
-	"github.com/veritone/realtime/modules/controller/client"
 )
 
 /**
@@ -32,7 +32,6 @@ runViaController:
                                         ** Stream/Batch: similarly
 
 */
-
 
 func (e *Engine) runViaController(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -137,7 +136,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 			for {
 				if engineIsWorking.Load() {
 					e.logDebug("Engine is still working .. sleep a bit")
-					time.Sleep(500*time.Millisecond)
+					time.Sleep(500 * time.Millisecond)
 				}
 			}
 			return
