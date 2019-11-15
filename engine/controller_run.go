@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 	"go.uber.org/atomic"
+	"github.com/veritone/realtime/modules/controller/client"
 )
 
 /**
@@ -56,6 +57,8 @@ func (e *Engine) runViaController(ctx context.Context) error {
 	defer cancel()
 	var cmd *exec.Cmd
 
+	log.Printf("Log will be written to %s", e.Config.ControllerConfig.LogFileName)
+
 	// Future migration of other engines --> so keep here
 	if len(e.Config.Subprocess.Arguments) > 0 {
 		cmd = exec.CommandContext(ctx, e.Config.Subprocess.Arguments[0], e.Config.Subprocess.Arguments[1:]...)
@@ -85,7 +88,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 		for {
 			select {
 			case <-ttlTimer.C:
-				log.Printf("Time is up (TTL is %d) -- GETTING OUT", e.controller.GetTTL())
+				e.logDebug("Time is up (TTL is %d) -- GETTING OUT", e.controller.GetTTL())
 				cancel()
 				return
 			case <-ctx.Done():
@@ -130,6 +133,7 @@ func (e *Engine) runViaController(ctx context.Context) error {
 
 	// one more ... tell Controller that we're terminated
 	e.controller.Terminate()
+	// close up shop?
 	return nil
 }
 
@@ -142,7 +146,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	processedCount := 0
-	e.controller.SetWorkRequestStatus("same", "running", fmt.Sprintf("New batch %d items", batchSize))
+	e.controller.SetWorkRequestStatus("", "running", fmt.Sprintf("New batch %d items", batchSize))
 	var engineIsWorking atomic.Bool
 	for {
 		select {
@@ -150,20 +154,20 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 			// not when we're working on something..
 			for {
 				if engineIsWorking.Load() {
-					log.Println("Engine is still working .. sleep a bit")
+					e.logDebug("Engine is still working .. sleep a bit")
 					time.Sleep(500*time.Millisecond)
 				}
 			}
 			return
 		default:
-			e.controller.SetWorkRequestStatus("same", "same", fmt.Sprintf("working on %d/%d...", processedCount, batchSize))
+			e.controller.SetWorkRequestStatus("", "", fmt.Sprintf("working on %d/%d...", processedCount, batchSize))
 			engineIsWorking.Store(true)
 			e.controller.Work(ctx, processedCount)
 			engineIsWorking.Store(false)
 			processedCount++ //move on to the next one..
 			if processedCount == batchSize {
 				// done
-				e.controller.SetWorkRequestStatus("same", "complete", fmt.Sprintf("completed %d items", batchSize))
+				e.controller.SetWorkRequestStatus("", client.WorkRequestStatusEnum_COMPLETE, fmt.Sprintf("completed %d items", batchSize))
 				return
 			}
 		}

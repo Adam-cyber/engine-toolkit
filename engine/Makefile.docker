@@ -1,14 +1,16 @@
 include Makefile.common
 
-# ------------------------ BUILDING DOCKER IMAGES FOR BASE ADAPTERS, ENGINES -------------------------------------------
-#
-# 1) Run `make -f Makefile.docker build-engine-base-docker` once to get a base Docker image that has ffmpeg, mime-support and streamlink
-# 2) `make -f Makefile.docker build-base-docker`  : to build the engine toolkit binary in an alpine Docker image
-# 3) `make -f Makefile.docker build-xxx` : build individual Docker image for the adapters, SIv2-related engines
-#
-# Or `make -f Makefile.docker build-all-engines`
-#
-# ----------------------------------------------------------------------------------------------------------------------
+help:
+	@echo "# ------------------------ BUILDING DOCKER IMAGES FOR BASE ADAPTERS, ENGINES -------------------------------------------"
+	@echo "#   Note make -f Makefile.docker == ./mkdocker.sh"
+	@echo "# 1) Run make -f Makefile.docker build-engine-base-docker once to get a base Docker image that has ffmpeg, mime-support and streamlink"
+	@echo "# 2) make -f Makefile.docker build-base-docker  : to build the engine toolkit binary in an alpine Docker image"
+	@echo "# 3) make -f Makefile.docker build-xxx : build individual Docker image for the adapters, SIv2-related engines"
+	@echo "#"
+	@echo "# Or make -f Makefile.docker build-all"
+	@echo "# 4) make push-all to push to dev"
+	@echo "#"
+	@echo "# ----------------------------------------------------------------------------------------------------------------------"
 
 alpine:
 	#CGO_ENABLED=0 GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
