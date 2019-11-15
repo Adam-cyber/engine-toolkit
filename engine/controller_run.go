@@ -14,43 +14,25 @@ import (
 
 /**
 runViaController:
-	In a loop fetching work from controller until TTL expired or told to terminate
-		For each task Item:
-			TODO - If a stream engine task:
-				Start heartbeat loop on the engine behalf until it's done?   <<<< KAFKA ALERT
-			If engineId is internally managed, eg. TVR, WSA or SI2 -->
-				Adapter: set up the payload.json and  the ENV as needed by the adapters -- typical: no input
-					Let the adapter does it  usual job --> ingest from its source then write to FS (no Kafka)
-			    SI2: Possible input/output:
+        In a loop fetching work from controller until TTL expired or told to terminate
+                For each task Item:
+                        TODO - If a stream engine task:
+                        If engineId is internally managed, eg. TVR, WSA or SI2 -->
+                                Adapter: set up the payload.json and  the ENV as needed by the adapters -- typical: no input
+                                        Let the adapter does it  usual job --> ingest from its source then write to FS (no Kafka)
+                            SI2: Possible input/output:
+                                                ** Stream --> SI2 --> TDO assets such as playback segment, primary media
+                                                ** Stream --> SI2 --> Stream, with ffmpeg e,g, transcoding only -- NOT RECOMMENDED but should be supported
+                                                ** Stream --> SI2 --> Chunks : audio, video, frame, some custome ffmpeg to segments
+                                                ** Chunk --> SI2 --> Chunks    (transcoder)
+                                For other engines:  Call the engine's Process webhook + callback URL from ET to allow async processing and status updates
+                                        ** Chunk: If processing time is within say 5minutes (configurable) --> response received on the process Webhook call
+                            Else:  They should return ACK +
 
-						** Stream --> SI2 --> Stream for downstream stream engines:  Not Support -- no stream-buffer business
-
-						** Stream --> SI2 --> Chunks for another SI2 engine to transcode/reencode etc.)  --> chunks (cognitive) definitely
-
-						** Stream --> SI2 --> Chunks for other cognitive engines such as transcription, translation etc.
-
-						** Chunk --> SI2 --> Chunks    (transcoder)
-
-				SI: setup the input payload as in SI right now to consume from scfs
-				Invoke the `entrypoints` for the adapter or SI
-
-				SI2: will need to be modified to have just ffmpeg and can consume from stream (from adapters),
-					or chunks (from another SI2 parent task)
-
-				SI2: consuming stream producing chunks -- e.g. to audio chunks for transcription
-					use scfs to consume streams and producing chunks to both scfs and Kafka (?)   <<<<< KAFKA ALERT
-
-				SI2 in consuming chunks, producing chunks (e.g. to split into chunks for audio  will have to:
-					get the chunks as if a chunk engine --> using the scfs Chunk,
-                    producing chunks
-
-
-		* First phase:  Adapters and SI --> any chunk output of SI should go to Kafka `chunk_all` as currently
-				Stream output may not be supported
-
-		* get input, output from scfs.Cache --> org --> job --> task --> IO
+                                        ** Stream/Batch: similarly
 
 */
+
 
 func (e *Engine) runViaController(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -146,7 +128,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	processedCount := 0
-	e.controller.SetWorkRequestStatus("", "running", fmt.Sprintf("New batch %d items", batchSize))
+	e.controller.SetWorkRequestStatus("", client.WorkRequestStatusEnum_RUNNING, fmt.Sprintf("New batch %d items", batchSize))
 	var engineIsWorking atomic.Bool
 	for {
 		select {
@@ -160,7 +142,7 @@ func (e *Engine) processWorkRequest(ctx context.Context, batchSize int) {
 			}
 			return
 		default:
-			e.controller.SetWorkRequestStatus("", "", fmt.Sprintf("working on %d/%d...", processedCount, batchSize))
+			e.controller.SetWorkRequestStatus("", "", fmt.Sprintf("working on %d/%d...", processedCount+1, batchSize))
 			engineIsWorking.Store(true)
 			e.controller.Work(ctx, processedCount)
 			engineIsWorking.Store(false)
