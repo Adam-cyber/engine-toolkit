@@ -47,10 +47,19 @@ func main() {
 func run(ctx context.Context) error {
 	eng := NewEngine()
 	eng.logDebug("engine: running")
+	defer eng.Terminate()
 
-	defer eng.logDebug("engine: stopped")
 	skipKafka := false
-
+	var err error
+	if eng.Config.ControllerConfig.ControllerMode {
+		// got to do what we got to do .. contact mother ship
+		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, EngineToolkitVersion, BuildTime, BuildTag)
+		if err != nil {
+			eng.logDebug("FATAL  Err=", err)
+			os.Exit(1)
+		}
+		skipKafka = true
+	}
 	isTraining, err := isTrainingTask()
 	if err != nil {
 		eng.logDebug("assuming processing task because isTrainingTask error:", err)
@@ -67,17 +76,7 @@ func run(ctx context.Context) error {
 		eng.logDebug("Running in file system mode (VERITONE_SELFDRIVING=true)")
 		skipKafka = true
 	}
-	if eng.Config.ControllerConfig.ControllerMode {
-		// got to do what we got to do .. contact mother ship
-		eng.controller, err = controller.NewControllerUniverse(&eng.Config.ControllerConfig, EngineToolkitVersion, BuildTime, BuildTag)
-		if err != nil {
-			eng.logDebug("WARNING: Skip getting work from controller due to error receiving when attempting to register with the controller.  Err=", err)
-		} else {
-			skipKafka = true
-			// check on the producing side
 
-		}
-	}
 	if !skipKafka {
 		eng.logDebug("brokers:", eng.Config.Kafka.Brokers)
 		eng.logDebug("consumer group:", eng.Config.Kafka.ConsumerGroup)
