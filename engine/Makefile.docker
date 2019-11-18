@@ -40,7 +40,7 @@ build-engine-base-docker:
 
 ## build a base image for engine-toolkit
 #TEMPORARY BLOCK
-build-base-docker: build-base-official
+build-base-docker: build-base-docker.official
 
 # TEMPORARY HERE:
 build-base-docker.quick: alpine
