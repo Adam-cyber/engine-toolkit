@@ -70,7 +70,7 @@ func NewEngine() *Engine {
 	if engineInstanceId == "" {
 		engineInstanceId = scfsio.GenerateUuid()
 	}
-	logFileName, logWriter, logger := scfsio.GetLogFileForEngineInstance(engineInstanceId)
+	logFileName, logWriter, logger := scfsio.GetEngineInstanceLogFile(engineInstanceId)
 
 	return &Engine{
 		logDebug: func(args ...interface{}) {
