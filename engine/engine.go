@@ -29,6 +29,13 @@ import (
 	rtLogger "github.com/veritone/realtime/modules/logger"
 )
 
+const (
+	dirInput   = "/files/in"
+	dirMoveTo  = "/files/out/completed"
+	dirErr     = "/files/out/errors"
+	dirResults = "/files/out/results"
+)
+
 // Engine consumes messages and calls webhooks to
 // fulfil the requests.
 type Engine struct {
@@ -181,7 +188,7 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 		Logger:                  logger,
 		PollInterval:            e.Config.SelfDriving.PollInterval,
 		MinimumModifiedDuration: e.Config.SelfDriving.MinimumModifiedDuration,
-		InputDir:                "/files/in",
+		InputDir:                dirInput,
 		InputPattern:            e.Config.SelfDriving.InputPattern,
 		WaitForReadyFiles:       e.Config.SelfDriving.WaitForReadyFiles,
 	}
@@ -189,9 +196,9 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 		Logger:           logger,
 		Selector:         sel,
 		OutputDirPattern: e.Config.SelfDriving.OutputDirPattern,
-		MoveToDir:        "/files/out/completed",
-		ErrDir:           "/files/out/errors",
-		ResultsDir:       "/files/out/results",
+		MoveToDir:        dirMoveTo,
+		ErrDir:           dirErr,
+		ResultsDir:       dirResults,
 		Process:          e.processSelfDrivingFile,
 	}
 	if err := processor.Run(ctx); err != nil {
@@ -199,10 +206,29 @@ func (e *Engine) runInferenceFSMode(ctx context.Context) error {
 	}
 	return nil
 }
-
+func (e *Engine) getSelfDrivingPayloadFile(inputDir string) ([]byte, error) {
+	payloadFilepath := filepath.Join(inputDir, "payload.json")
+	_, err := os.Stat(payloadFilepath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	b, err := ioutil.ReadFile(payloadFilepath)
+	if err != nil {
+		return nil, errors.Wrap(err, "read self-driving payload.json")
+	}
+	e.logDebug("using payload.json: %s: %s", payloadFilepath, string(b))
+	return b, nil
+}
 func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File) error {
 	e.logDebug("processing file:", file)
-	req, err := processing.NewRequestFromFile(e.Config.Webhooks.Process.URL, file)
+	payloadJSON, err := e.getSelfDrivingPayloadFile(dirInput)
+	if err != nil {
+		return err
+	}
+	req, err := e.newRequestFromFile(e.Config.Webhooks.Process.URL, file, payloadJSON)
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
@@ -491,6 +517,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 					return errors.Wrap(err, "reading multipart response")
 				}
 				assetCreate := processing.AssetCreate{
+                                        AssetType:      "media",
 					ContainerTDOID: mediaChunk.TDOID,
 					ContentType:    p.Header.Get("Content-Type"),
 					Name:           p.FileName(),
