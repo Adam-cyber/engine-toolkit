@@ -157,6 +157,10 @@ func NewConfig(engineInstanceId string, logFileName string, logWriter io.WriteCl
 		c.ControllerConfig.Webhooks = c.Webhooks
 		c.ControllerConfig.ProcessingOptions = c.Processing
 		c.ControllerConfig.SetDefaults()
+
+		c.ControllerConfig.Subprocess = c.Subprocess
+		c.ControllerConfig.Stdout = c.Stdout
+		c.ControllerConfig.Stderr = c.Stderr
 	}
 	return c
 }
