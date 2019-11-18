@@ -24,6 +24,6 @@ RUN git config --global url."https://${GITHUB_ACCESS_TOKEN}:x-oauth-basic@github
 RUN mkdir /app 
 ENV CGO_ENABLED=0
 
-RUN GOPATH=/go githash=${githash} make -e deps
+RUN GOPATH=/go githash=${githash} make -e deps && go get github.com/cespare/xxhash && rm -rf vendor/github.com/cespare/xxhash
 RUN GOPATH=/go githash=${githash} make -e -f Makefile.docker alpine && cp release/bin/engine /app/
 
