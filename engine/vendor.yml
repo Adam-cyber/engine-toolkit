@@ -118,7 +118,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: 2e04cf1bcd021b3616f29ea9b8e48aab88607568
 - path: github.com/veritone/realtime
-  rev: 69eb94c10bda3d2cd8cf677f656dd6f621c5700e
+  rev: 314831b3528c339a0e203053d56d56052221b97e
 - path: github.com/xeipuuv/gojsonpointer
   rev: 02993c407bfbf5f6dae44c4f4b1cf6a39b5fc5bb
 - path: github.com/xeipuuv/gojsonreference

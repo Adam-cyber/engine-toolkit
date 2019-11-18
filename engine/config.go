@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"github.com/veritone/realtime/modules/engines/toolkit/controller"
 	"github.com/veritone/realtime/modules/engines/toolkit/processing"
+
 	"io"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	rtLogger "github.com/veritone/realtime/modules/logger"
 )
 
 // Config holds engine configuration settings.
@@ -62,7 +65,7 @@ type Config struct {
 }
 
 // NewConfig gets default configuration settings.
-func NewConfig() Config {
+func NewConfig(engineInstanceId string, logFileName string, logWriter io.WriteCloser, logger rtLogger.Logger) Config {
 	var c Config
 
 	c.Subprocess.Arguments = os.Args[1:]
@@ -81,6 +84,9 @@ func NewConfig() Config {
 	}
 
 	c.Engine.InstanceID = os.Getenv("ENGINE_INSTANCE_ID")
+	if c.Engine.InstanceID == "" {
+		c.Engine.InstanceID = engineInstanceId
+	}
 	c.Engine.ID = os.Getenv("ENGINE_ID")
 	c.Processing.DisableChunkDownload = os.Getenv("VERITONE_DISABLE_CHUNK_DOWNLOAD") == "true"
 
@@ -133,24 +139,12 @@ func NewConfig() Config {
 		}
 	}
 
-	// controller mode
-	/** TODO pick up from realtime/config .. for now we'll just pick up a few
-	controllerConfig := os.Getenv("VERITONE_CONTROLLER_CONFIG_JSON")
-	if controllerConfig != "" {
-		// deserialize it
-		err := json.Unmarshal([]byte(controllerConfig), &c.ControllerConfig)
-		if err == nil {
-			c.ControllerConfig.Kafka = c.Kafka   // propagate the config here..
-			c.ControllerConfig.Webhooks = c.Webhooks
-			c.ControllerConfig.SetDefaults()
-		} else {
-			log.Printf("Unable to unmarshal VERITONE_CONTROLLER_CONFIG_JSON, err=%v", err)
-			c.ControllerConfig.ControllerMode = false
-		}
-	}
-	*/
 	if os.Getenv("AIWARE_CONTROLLER") != "" {
 		// trigger on controller
+		c.ControllerConfig.EngineInstanceId = engineInstanceId
+		c.ControllerConfig.Logger = logger
+		c.ControllerConfig.LogFileName = logFileName
+		c.ControllerConfig.LogWriter = logWriter
 		c.ControllerConfig.ControllerMode = true
 		c.ControllerConfig.HostId = os.Getenv("AIWARE_HOST_ID")
 		c.ControllerConfig.ControllerUrl = os.Getenv("AIWARE_CONTROLLER")
@@ -163,6 +157,10 @@ func NewConfig() Config {
 		c.ControllerConfig.Webhooks = c.Webhooks
 		c.ControllerConfig.ProcessingOptions = c.Processing
 		c.ControllerConfig.SetDefaults()
+
+		c.ControllerConfig.Subprocess = c.Subprocess
+		c.ControllerConfig.Stdout = c.Stdout
+		c.ControllerConfig.Stderr = c.Stderr
 	}
 	return c
 }

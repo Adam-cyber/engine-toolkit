@@ -21,10 +21,12 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
+	"github.com/veritone/realtime/modules/engines/scfsio"
 	"github.com/veritone/realtime/modules/engines/toolkit/controller"
+	"github.com/veritone/realtime/modules/engines/toolkit/processing"
 	"github.com/veritone/realtime/modules/engines/toolkit/selfdriving"
 	"github.com/veritone/realtime/modules/engines/toolkit/vericlient"
-	"github.com/veritone/realtime/modules/engines/toolkit/processing"
+	rtLogger "github.com/veritone/realtime/modules/logger"
 )
 
 // Engine consumes messages and calls webhooks to
@@ -56,15 +58,25 @@ type Engine struct {
 
 	// Controller specific
 	controller *controller.ControllerUniverse
+	logger     rtLogger.Logger
 }
 
 // NewEngine makes a new Engine with the specified Consumer and Producer.
+// Logging:  /cache/logs/engineInstaces/{engineInstanceId}.log
+//
 func NewEngine() *Engine {
+	// generate engineInstanceId and use that for logging
+	engineInstanceId := os.Getenv("ENGINE_INSTANCE_ID")
+	if engineInstanceId == "" {
+		engineInstanceId = scfsio.GenerateUuid()
+	}
+	logFileName, logWriter, logger := scfsio.GetEngineInstanceLogFile(engineInstanceId)
+
 	return &Engine{
 		logDebug: func(args ...interface{}) {
-			log.Println(args...)
+			logger.Debug(args...)
 		},
-		Config:            NewConfig(),
+		Config:            NewConfig(engineInstanceId, logFileName, logWriter, logger),
 		webhookClient:     &http.Client{ /* no timeout */ },
 		graphQLHTTPClient: &http.Client{Timeout: 30 * time.Minute},
 	}
@@ -82,12 +94,30 @@ func isTrainingTask() (bool, error) {
 	return payload.Mode == "library-train", nil
 }
 
+func (e *Engine) Terminate() {
+	// close up stuff
+	if e.Config.ControllerConfig.LogWriter != nil {
+		e.Config.ControllerConfig.LogWriter.Close()
+		// also direct the logger to just os
+		if e.Config.ControllerConfig.Logger != nil {
+			if e.Config.ControllerConfig.Logger.GetLogrus() != nil {
+				e.Config.ControllerConfig.Logger.GetLogrus().Out = os.Stdout
+			}
+		}
+	}
+}
+
 // Run runs the Engine.
 // Context errors may be returned.
 // TODO For controller route, we need to deal with batch, library engine training from within the loop
 //
 //
 func (e *Engine) Run(ctx context.Context) error {
+	if e.controller != nil {
+		e.logDebug("Running in Controller mode")
+		return e.runViaController(ctx)
+	}
+
 	isTraining, err := isTrainingTask()
 	if err != nil {
 		return errors.Wrap(err, "isTrainingTask")
@@ -97,6 +127,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		e.logDebug("running subprocess for testing...")
 		return e.runSubprocessOnly(ctx)
 	}
+	// for V3  -- even with training, we must report the status for the task!
 	if isTraining {
 		e.logDebug("running subprocess for training...")
 		return e.runSubprocessOnly(ctx)
@@ -110,10 +141,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		e.logDebug("running inference in file system mode...")
 		return e.runInferenceFSMode(ctx)
 	}
-	if e.controller != nil {
-		e.logDebug("Running in Controller mode")
-		return e.runViaController(ctx)
-	}
+
 	e.logDebug("running inference...")
 	return e.runInference(ctx)
 }
