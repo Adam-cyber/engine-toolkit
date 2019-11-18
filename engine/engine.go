@@ -228,7 +228,7 @@ func (e *Engine) processSelfDrivingFile(outputDir string, file selfdriving.File)
 	if err != nil {
 		return err
 	}
-	req, err := e.newRequestFromFile(e.Config.Webhooks.Process.URL, file, payloadJSON)
+	req, err := processing.NewRequestFromFile(e.Config.Webhooks.Process.URL, file, payloadJSON)
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
