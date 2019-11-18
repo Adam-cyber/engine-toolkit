@@ -9,7 +9,8 @@ RUN npm install -i
 
 RUN apk update \
         && apk upgrade \
-        && apk --no-cache add ca-certificates
+        && apk --no-cache add ca-certificates \
+        && chmod +x /app/engine
 
 ENV VERITONE_WEBHOOK_READY="http://0.0.0.0:8080/readyz"
 ENV VERITONE_WEBHOOK_PROCESS="http://0.0.0.0:8080/process"
