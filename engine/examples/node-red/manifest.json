@@ -1,0 +1,18 @@
+{
+  "engineId": "Enter your engine ID here",
+  "url": "Enter your engine URL",
+  "externalCalls": [],
+  "outputFormats": [
+    "application/json"
+  ],
+  "clusterSize": "small",
+  "initialConcurrency": 50,
+  "maxConcurrency": 50,
+  "preferredInputFormat": "text/plain",
+  "supportedInputFormats": [
+    "text/plain",
+    "text/html",
+    "text/plain; charset=utf-8"
+  ],
+  "engineMode": "chunk"
+}
