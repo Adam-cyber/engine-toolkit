@@ -1,9 +1,0 @@
-UPDATE job_new.build
-SET build_state = 'paused'
-WHERE engine_id IN ('ENGINE_ID')
-  AND build_state = 'deployed';
-
-UPDATE job_new.build
-SET build_state = 'deployed'
-WHERE engine_id IN ('74dfd76b-472a-48f0-8395-c7e01dd7fd24', '9e611ad7-2d3b-48f6-a51b-0a1ba40feab4')
-  AND build_state = 'deploying'
