@@ -118,7 +118,7 @@ vendors:
 - path: github.com/veritone/graphql
   rev: 2e04cf1bcd021b3616f29ea9b8e48aab88607568
 - path: github.com/veritone/realtime
-  rev: c64c5c1996a164ef07dad1cb4d5550bb4eef2581
+  rev: 3070af8534969cce09835043dab4bb29475ccea5
 - path: github.com/xeipuuv/gojsonpointer
   rev: 02993c407bfbf5f6dae44c4f4b1cf6a39b5fc5bb
 - path: github.com/xeipuuv/gojsonreference
@@ -165,3 +165,5 @@ vendors:
   rev: dd632973f1e7218eb1089048e0798ec9ae7dceb8
 - path: honnef.co/go/tools
   rev: f51cd49dbadb98d60043a445a177e72f0cc62e6b
+- path: github.com/shirou/gopsutil/cpu
+  rev: c9a2a69ca76b46342953793afe41e42b6cef0ce3
