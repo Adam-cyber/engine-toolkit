@@ -3,12 +3,22 @@ include Makefile.common
 help:
 	@echo "# ------------------------ BUILDING DOCKER IMAGES FOR BASE ADAPTERS, ENGINES -------------------------------------------"
 	@echo "#   Note make -f Makefile.docker == ./mkdocker.sh"
-	@echo "# 1) Run make -f Makefile.docker build-engine-base-docker once to get a base Docker image that has ffmpeg, mime-support and streamlink"
-	@echo "# 2) make -f Makefile.docker build-base-docker  : to build the engine toolkit binary in an alpine Docker image"
-	@echo "# 3) make -f Makefile.docker build-xxx : build individual Docker image for the adapters, SIv2-related engines"
+	@echo "#   For pushing to VDA, make sure to do 'docker login xxx' to VDA environment"
 	@echo "#"
+	@echo "# 1) Run make -f Makefile.docker build-engine-base-docker once to get a base Docker image that has ffmpeg, mime-support and streamlink"
+	@echo "#"
+	@echo "# 2) make -f Makefile.docker build-base-docker  : to build the engine toolkit binary in an alpine Docker image"
+	@echo "#"
+	@echo "# 3) make -f Makefile.docker build-xxx : build individual Docker image for the adapters, SIv2-related engines, where xxx = {wsa, tvr, playback, asset, ffmpeg}"
 	@echo "# Or make -f Makefile.docker build-all"
-	@echo "# 4) make push-all to push to dev"
+	@echo "#"
+	@echo "# 4) make -f Makefile.docker push-xxx : push individual image to DEV VDA, where xxx = {wsa, tvr, playback, asset, ffmpeg}"
+	@echo "# Or make -f Makefile.docker push-all"
+	@echo "#"
+	@echo "# To push to other environments: supply the environment variable, THE_ENV, to the script as shown below."
+	@echo "#"
+	@echo "#        Stage:  THE_ENV=docker.aws-stage ./mkdocker.sh push-all"
+	@echo "#        Prod:   THE_ENV=docker ./mkdocker.sh push-all"
 	@echo "#"
 	@echo "# ----------------------------------------------------------------------------------------------------------------------"
 
@@ -147,10 +157,12 @@ run-base:
 	docker run -it --rm -v /tmp:/tmp -v ${CURPWD}:/go/src/github.com/veritone/engine-toolkit/engine $(BASE_IMAGE)
 
 # ----------------------------------------
-PROD_VDA=docker.veritone.com/7682
-DEV_VDA=docker.aws-dev.veritone.com/7682
+PROD_VDA=docker.veritone
+DEV_VDA=docker.aws-dev
+STAGE_VDA=docker.aws-stage
 
-ENV_VDA=$(DEV_VDA)
+THE_ENV=$(DEV_VDA)
+ENV_VDA=$(THE_ENV).veritone.com/7682
 
 push-wsa:
 	docker tag $(WSA_IMAGE) $(ENV_VDA)/$(WSA_IMAGE)
