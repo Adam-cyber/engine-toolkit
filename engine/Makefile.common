@@ -3,4 +3,4 @@ release = v0.3.0
 gitbranch = $(shell git rev-parse --abbrev-ref HEAD)
 builddate = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
-ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(builddate) -X main.BuildTag=$(githash)
+ldflags = -X main.EngineToolkitVersion=$(release) -X main.BuildTime=$(builddate) -X main.BuildTag=$(gitbranch)-$(githash)
