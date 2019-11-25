@@ -465,7 +465,7 @@ func (e *Engine) processMessageMediaChunk(ctx context.Context, msg *sarama.Consu
 	var content string
 	err := retry.Do(func() error {
 		req, err := processing.NewRequestFromMediaChunk(e.webhookClient, e.Config.Webhooks.Process.URL,
-			mediaChunk, e.Config.Processing.DisableChunkDownload)
+			mediaChunk, e.Config.Processing.DisableChunkDownload, "" ,"", "", 0)
 		if err != nil {
 			return errors.Wrap(err, "new request")
 		}
