@@ -18,7 +18,7 @@ generate-deps:
 	# Generate vendor.yml
 	govend -v -l --prune
 
-buildrelease:
+buildrelease: deps
 	rm -rf dist
 	mkdir dist
 	GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
