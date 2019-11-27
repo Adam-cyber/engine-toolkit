@@ -11,13 +11,14 @@ deps:
 	# Fetch vendored dependencies
 	#rm -rf ./vendor
 	govend -v
+	go get github.com/cespare/xxhash
 
 generate-deps:
 	go get -u github.com/govend/govend
 	# Generate vendor.yml
 	govend -v -l --prune
 
-buildrelease:
+buildrelease: deps
 	rm -rf dist
 	mkdir dist
 	GO111MODULE=auto GOOS=linux GOARCH=amd64 go build -ldflags "${ldflags}" -o release/bin/engine
