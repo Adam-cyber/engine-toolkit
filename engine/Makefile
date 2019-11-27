@@ -11,6 +11,7 @@ deps:
 	# Fetch vendored dependencies
 	#rm -rf ./vendor
 	govend -v
+	go get github.com/cespare/xxhash
 
 generate-deps:
 	go get -u github.com/govend/govend
