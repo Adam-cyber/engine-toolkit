@@ -8,7 +8,7 @@ from keras.preprocessing import image
 from keras.applications.resnet50 import preprocess_input, decode_predictions
 from io import BytesIO
 from flask import Flask, jsonify, request
-from gevent import wsgi
+from gevent import pywsgi
 
 # adjust server logging
 log = logging.getLogger('werkzeug')
@@ -106,5 +106,5 @@ def shutdown():
 
 if __name__ == '__main__':
     port = 8080
-    server = wsgi.WSGIServer(('0.0.0.0', int(port)), app)
+    server = pywsgi.WSGIServer(('0.0.0.0', int(port)), app)
     server.serve_forever()
